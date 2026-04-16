@@ -1,0 +1,120 @@
+1. Score Climat
+Ta logique de pondération est bonne. Je suggère : Vert = 100, Jaune = 75, Orange = 35, Rouge = 0, calculé sur les sessions des 7 derniers jours glissants (pas juste la journée — trop volatile). Les sessions sans signal émotionnel clair comptent comme Vert par défaut. 
+2. Fin de session
+Les deux mécanismes ensemble : un bouton discret "J'ai fini" (texte doux genre "Bonne journée 👋") ET une fermeture automatique après 10 minutes d'inactivité. Le résumé admin est généré à la fermeture, quelle que soit la cause.
+3. Alertes et notifications
+Réserve les push/email uniquement aux signaux Critiques. Les signaux modérés (stress, examens) apparaissent dans le dashboard mais sans notification intrusive — sinon l'admin sera submergé et finira par ignorer tout.
+4. Note interne
+Note optionnelle, pas obligatoire. Obliger une note crée de la friction et les admins vont éviter de traiter les alertes. Par contre, tu peux afficher un placeholder encourageant : "Optionnel : notez vos actions..."
+C'est quoi les Zones of Regulation ?
+
+C'est un framework créé par la chercheuse américaine Leah Kuypers. L'idée est simple : classer l'état émotionnel d'un enfant en 4 couleurs, comme un thermomètre. Ce n'est pas un outil médical — c'est un outil pédagogique utilisé dans les écoles du monde entier. CareNest l'utilise comme référence pour classifier les sessions de chat.
+
+Les 4 zones et leur signification
+
+🟢 Vert — Tout va bien
+L'enfant est calme, heureux, concentré. Aucune intervention nécessaire.
+Exemples de signaux dans le chat : parle positivement de sa journée, rigole, dit que tout va bien.
+
+🟡 Jaune — Attention légère
+L'enfant ressent quelque chose de modéré mais gère encore. Stress avant examen, petite dispute, fatigue, excitation.
+Exemples : "j'ai peur du contrôle demain", "j'ai eu une dispute avec mon ami", "je suis fatigué".
+Action IA : rassure, propose un exercice de respiration, continue la conversation.
+
+🟠 Orange — Préoccupant
+Tristesse répétée, anxiété persistante, isolement mentionné, mal-être qui dure.
+Exemples : "je me sens toujours seul", "personne ne m'aime à l'école", "je n'ai plus envie de rien".
+Action IA : répond avec beaucoup d'empathie, approfondit doucement, session classée Orange.
+
+🔴 Rouge — Critique, alerte immédiate
+Harcèlement, pensées négatives, danger, détresse grave.
+Exemples : "ils me tapent tous les jours", "je voudrais disparaître", "j'ai peur d'aller à l'école".
+Action IA : continue à parler doucement à l'enfant MAIS déclenche une alerte silencieuse côté serveur immédiatement.
+
+Comment l'IA retourne la zone — implémentation concrète
+
+À la fin de chaque conversation, le prompt système demande à l'IA de retourner la zone dans les métadonnées. Ce n'est pas affiché à l'enfant. C'est stocké dans la colonne zone de la table sessions.
+
+Le prompt système doit inclure cette instruction à la fin :
+
+À la fin de la conversation, retourne uniquement sur la dernière ligne :
+ZONE: green | yellow | orange | red
+
+Le backend parse cette ligne, la retire du message affiché à l'enfant, et la stocke en BDD.
+
+⚠️ Ajout important — Green avec low_confidence
+
+Une session peut être classée Green par défaut même si aucune émotion claire n’a été détectée.
+
+Dans ce cas, il faut ajouter un flag :
+
+zone = green
+low_confidence = true
+
+👉 Cela signifie :
+
+l’enfant n’a exprimé aucune émotion identifiable
+MAIS on n’est pas certain qu’il va bien
+
+Exemples :
+
+réponses très courtes ("oui", "ok", "je sais pas")
+pas d’émotion exprimée
+
+➡️ Ce flag est stocké en base et non visible côté enfant
+
+Objectif :
+
+éviter de surévaluer le bien-être global
+permettre des améliorations futures (pondération, relance, etc.)
+Comment le score climat est calculé depuis les zones
+
+Valeur numérique de chaque zone :
+
+Zone	Points
+🟢 Vert	100
+🟡 Jaune	70
+🟠 Orange	35
+🔴 Rouge	0
+Formule en deux étapes (corrigée pour éviter le biais par volume)
+
+Étape 1 — Score par enfant sur 7 jours glissants :
+score_enfant = moyenne des points de toutes ses sessions
+
+Étape 2 — Score école :
+Score Climat = moyenne de tous les score_enfant actifs
+
+Règles importantes
+Un enfant sans session sur 7 jours → ignoré du calcul (le silence n'est pas un signal fiable)
+Une session qui déclenche une alerte Rouge → zone = red automatiquement (priorité absolue)
+Une session sans signal clair → zone = green par défaut + low_confidence = true
+Le score se recalcule à chaque fin de session, pas en temps réel
+🟡 Ajout — Statut “enfant à suivre”
+
+Un statut supplémentaire doit être calculé côté backend :
+
+👉 Si score_enfant < 50
+→ alors status = "à suivre"
+
+Ce statut permet à l’admin de :
+
+identifier rapidement les enfants nécessitant une attention
+prioriser les actions
+
+Ce statut est :
+
+visible dans le dashboard admin
+recalculé à chaque mise à jour du score
+Exemple chiffré
+
+Yassine : 3 sessions → Orange(35) + Jaune(70) + Orange(35) = moyenne 47/100
+Sara : 1 session → Vert(100) = 100/100
+Karim : 2 sessions → Jaune(70) + Vert(100) = moyenne 85/100
+
+👉 Score Climat école = (47 + 100 + 85) ÷ 3 = 77/100
+
+👉 Statuts :
+
+Yassine → à suivre
+Sara → OK
+Karim → OK
