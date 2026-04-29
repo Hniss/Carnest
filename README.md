@@ -1,58 +1,151 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CareNest
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Plateforme de bien-être émotionnel pour élèves marocains (5-14 ans). Un assistant IA bienveillant écoute l'enfant, classifie son état émotionnel selon les **Zones of Regulation** (Kuypers), et remonte des alertes au psychologue scolaire / direction sans jamais stocker les messages bruts.
 
-## About Laravel
+> **MVP** — Laravel 11 · Livewire 3 · Tailwind 3 · SQLite · Gemini (gratuit) ou Anthropic Claude
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Aperçu
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Espace | Public | Fonction |
+|---|---|---|
+| `/login` | Admin / direction | Tableau de bord — score climat, élèves à suivre, alertes |
+| `/child/login` | Élève | Chat avec **Care**, l'assistant IA |
 
-## Learning Laravel
+L'analyse émotionnelle (zone green / yellow / orange / red) est faite **à la clôture de chaque session**. Une zone `orange` ou `red` génère automatiquement une **alerte critique/modérée** côté admin.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+**Conformité** — aucun message brut n'est conservé : seule la synthèse IA, la zone, le timestamp et un drapeau `low_confidence` sont persistés (loi 09-08 + RGPD).
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Pré-requis
 
-## Agentic Development
+- **PHP 8.3+** avec extensions : `mbstring`, `openssl`, `pdo`, `sqlite3`, `tokenizer`, `xml`, `curl`, `fileinfo`
+- **Composer 2.x**
+- **Node 20+** & **npm**
+- Une **clé API Gemini** gratuite : https://aistudio.google.com/app/apikey
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+> SQLite est utilisé par défaut, aucun serveur MySQL/Postgres requis pour faire tourner.
+
+---
+
+## Installation rapide (5 minutes)
 
 ```bash
-composer require laravel/boost --dev
+# 1. Cloner et entrer dans le dossier
+git clone <url-du-repo>
+cd MVP
 
-php artisan boost:install
+# 2. Dépendances
+composer install
+npm install
+
+# 3. Configurer l'environnement
+cp .env.example .env
+php artisan key:generate
+
+# 4. Coller la clé Gemini dans .env (ligne GEMINI_API_KEY=...)
+
+# 5. Initialiser la base SQLite + données de démo
+#    Linux/Mac :
+touch database/database.sqlite
+#    Windows PowerShell :
+#    New-Item -Path database/database.sqlite -ItemType File
+php artisan migrate:fresh --seed --force
+
+# 6. Compiler les assets
+npm run build
+
+# 7. Lancer le serveur
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+L'app est disponible sur **http://127.0.0.1:8000**.
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Comptes de démonstration
 
-## Code of Conduct
+| Rôle | URL | Email | Mot de passe |
+|---|---|---|---|
+| Administrateur (direction) | `/login` | `admin@carenest.ma` | `admin123` |
+| Élève (10 ans) | `/child/login` | `yassine@carenest.ma` | `demo123` |
+| Élève (8 ans) | `/child/login` | `amina@carenest.ma` | `demo123` |
+| Élève (11 ans) | `/child/login` | `omar@carenest.ma` | `demo123` |
+| Élève (9 ans) | `/child/login` | `sara@carenest.ma` | `demo123` |
+| Élève (12 ans) | `/child/login` | `karim@carenest.ma` | `demo123` |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## Tester le flow complet
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Connecte-toi côté **enfant** avec un compte ci-dessus.
+2. Discute avec Care — partage une émotion, une difficulté, etc.
+3. Clique sur **« J'ai fini ma session »** en bas.
+   → l'IA analyse la conversation, classe la zone émotionnelle, et crée une alerte si `orange` ou `red`.
+4. Déconnecte-toi, connecte-toi côté **admin**.
+5. Le dashboard montre le score climat de l'établissement, la liste des élèves et les alertes générées.
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Configuration IA
+
+Le provider est sélectionné via `AI_PROVIDER` dans `.env` :
+
+- `gemini` (par défaut) — endpoint OpenAI-compatible de Google, clé gratuite, modèle `gemini-2.5-flash`. Retry automatique sur 429/5xx.
+- `anthropic` — bascule vers Claude (stub, à compléter pour la prod).
+
+Pour ajouter un provider, implémenter `App\Services\AIService` et binder dans `AppServiceProvider::register()`.
+
+---
+
+## Architecture en bref
+
+```
+app/
+├── Livewire/
+│   ├── Admin/Dashboard.php
+│   └── Child/{Login,ChatInterface}.php
+├── Models/
+│   ├── School, SchoolSetting           # multi-école
+│   ├── User, Child                     # 2 guards distincts (web + child)
+│   ├── ChatSession, Alert, AdminNote
+├── Services/
+│   ├── AIService.php                   # interface
+│   ├── GeminiService.php               # impl. Gemini
+│   └── ClaudeAIService.php             # stub Anthropic
+├── Jobs/ProcessSessionClosure.php      # recalcul score_enfant + status
+└── Observers/ChildObserver.php         # auto-set age_group
+```
+
+**Stack émotion :** Zones of Regulation (Kuypers)
+- `green` = 100 pts · `yellow` = 70 · `orange` = 35 · `red` = 0
+- `score_enfant` = moyenne pondérée 7 jours glissants
+- `status = 'a_suivre'` automatique si score < 50
+
+---
+
+## Tests
+
+```bash
+php artisan test
+```
+
+44 tests · ~150 assertions · couvrent le schéma BDD, modèles, observer, auth.
+
+---
+
+## Stack technique
+
+- **Backend** : Laravel 11, PHP 8.3, SQLite (dev) / MySQL (prod)
+- **Frontend** : Livewire 3 + Tailwind 3 + Alpine.js
+- **Auth** : Laravel Breeze (Volt) — guards `web` (admin) + `child` (élève)
+- **IA** : Gemini 2.5 Flash via endpoint OpenAI-compatible
+- **Queue** : SQLite-backed (jobs de clôture de session)
+
+---
+
+## Licence
+
+Projet de démonstration. Tous droits réservés.

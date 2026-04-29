@@ -11,6 +11,8 @@
 /.phpunit.cache
 /.vscode
 /.zed
+/.claude/settings.json
+/.claude/settings.local.json
 /auth.json
 /node_modules
 /public/build

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'ai' => [
+        'provider'        => env('AI_PROVIDER', 'gemini'),
+        'gemini_key'      => env('GEMINI_API_KEY'),
+        'gemini_model'    => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'anthropic_key'   => env('ANTHROPIC_API_KEY'),
+        'anthropic_model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+    ],
+
 ];

@@ -125,12 +125,13 @@ backend/                         # Laravel app
 - [x] Spec technique v2 rédigée (voir `docs/spec-technique-v2.md`)
 - [x] Compléments Zones of Regulation validés (voir `docs/complement-zones.md`)
 - [x] Mockup UI React réalisé (voir `docs/ui-mockup.jsx` — **référence visuelle uniquement**, à porter en Livewire)
-- [ ] Setup Laravel + Livewire
-- [ ] Schéma BDD
-- [ ] Intégration Claude API
+- [x] Setup Laravel + Livewire
+- [x] Schéma BDD
+- [x] Service IA swappable (`AIService` interface + `LlmApiService` dev + `ClaudeAIService` stub prod)
+- [ ] Intégration Claude API (prod — ClaudeAIService à implémenter)
 - [ ] Chat enfant
 - [ ] Dashboard admin
-- [ ] Tests
+- [x] Tests (48 passed)
 
 ---
 

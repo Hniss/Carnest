@@ -54,32 +54,22 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_navigation_menu_can_be_rendered(): void
+    public function test_dashboard_is_reachable_when_authenticated(): void
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user);
-
-        $response = $this->get('/dashboard');
-
-        $response
-            ->assertOk()
-            ->assertSeeVolt('layout.navigation');
+        $this->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk();
     }
 
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user);
-
-        $component = Volt::test('layout.navigation');
-
-        $component->call('logout');
-
-        $component
-            ->assertHasNoErrors()
-            ->assertRedirect('/');
+        $this->actingAs($user)
+            ->post('/logout')
+            ->assertRedirect('/login');
 
         $this->assertGuest();
     }

@@ -2,21 +2,32 @@
 
 namespace App\Providers;
 
+use App\Services\AIService;
+use App\Services\ClaudeAIService;
+use App\Services\GeminiService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
-        //
+        $this->app->singleton(AIService::class, function () {
+            $provider = config('services.ai.provider', 'gemini');
+
+            if ($provider === 'anthropic') {
+                return new ClaudeAIService(
+                    apiKey: config('services.ai.anthropic_key'),
+                    model: config('services.ai.anthropic_model', 'claude-sonnet-4-20250514'),
+                );
+            }
+
+            return new GeminiService(
+                apiKey: config('services.ai.gemini_key'),
+                model: config('services.ai.gemini_model', 'gemini-2.5-flash'),
+            );
+        });
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         //
