@@ -127,11 +127,15 @@ backend/                         # Laravel app
 - [x] Mockup UI React réalisé (voir `docs/ui-mockup.jsx` — **référence visuelle uniquement**, à porter en Livewire)
 - [x] Setup Laravel + Livewire
 - [x] Schéma BDD
-- [x] Service IA swappable (`AIService` interface + `LlmApiService` dev + `ClaudeAIService` stub prod)
+- [x] Service IA swappable (`AIService` interface + `GeminiService` dev + `ClaudeAIService` stub prod)
 - [ ] Intégration Claude API (prod — ClaudeAIService à implémenter)
-- [ ] Chat enfant
+- [x] Chat enfant — **post-QA v2** : SYSTEM_TEMPLATE durci (anti-boucle, mode sécurité, micro-actions, prudence familiale), `chat()` retourne désormais `[message, zone, alert_type, is_critical, low_confidence]`, `CrisisDetector` (filet déterministe FR pour signaux rouge/orange), alertes admin créées en **temps réel** dans `fetchReply()` (idempotence DB), `endSession` protège contre la redescente artificielle de zone via `maxZone(running, analyse)`.
 - [ ] Dashboard admin
-- [x] Tests (48 passed)
+- [x] Tests (62 passed, 204 assertions)
+
+### Réserves QA ouvertes (non bloquantes)
+- Ajouter au moins un test Livewire intégré couvrant `sendMessage → Alert créée → 2e message neutre → pas de 2e Alert` (idempotence run-to-run).
+- Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` — pas de canal push/email implémenté.
 
 ---
 

@@ -9,15 +9,13 @@ class ClaudeAIService implements AIService
         private readonly string $model = 'claude-sonnet-4-20250514',
     ) {}
 
-    public function chat(array $messages, int $childAge): string
+    public function chat(array $messages, int $childAge): array
     {
-        // TODO: implémenter avec le SDK Anthropic après phase test
-        throw new \RuntimeException('ClaudeAIService not implemented yet — use LlmApiService for dev');
+        throw new \RuntimeException('ClaudeAIService not implemented yet — use GeminiService for dev');
     }
 
     public function analyzeSession(array $messages, int $childAge): array
     {
-        // TODO: implémenter avec le SDK Anthropic après phase test
-        throw new \RuntimeException('ClaudeAIService not implemented yet — use LlmApiService for dev');
+        throw new \RuntimeException('ClaudeAIService not implemented yet — use GeminiService for dev');
     }
 }
