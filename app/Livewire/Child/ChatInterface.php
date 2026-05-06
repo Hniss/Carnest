@@ -67,8 +67,12 @@ class ChatInterface extends Component
             : ['zone' => $this->currentZone, 'alert_type' => null, 'matched' => false];
 
         // 2) Demande à l'IA.
+        // P4 : on retire systématiquement le welcome (premier message assistant
+        // avant tout échange) pour que Gemini reçoive le system prompt propre
+        // dès le premier message de l'enfant. Sinon le bot répond parfois de
+        // manière générique au tout premier tour.
         $aiMessages = collect($this->messages)
-            ->filter(fn($m) => $m['role'] !== 'assistant' || count($this->messages) > 1)
+            ->skipWhile(fn ($m) => $m['role'] === 'assistant')
             ->values()
             ->toArray();
 
@@ -149,12 +153,20 @@ class ChatInterface extends Component
                     'child_id'   => $child->id,
                     'school_id'  => $child->school_id,
                     'type'       => $finalAlertType ?? 'detresse',
-                    'level'      => $finalZone === 'red' ? 'critical' : 'moderate',
+                    'level'      => $finalZone === 'red'
+                        ? 'critical'
+                        : app(\App\Services\AlertLevelResolver::class)->resolve(
+                            $finalAlertType,
+                            $finalZone,
+                            collect($this->messages)->where('role', 'user')->pluck('content')->all()
+                        ),
                 ]);
                 $this->alertCreated = true;
             }
 
-            \App\Jobs\ProcessSessionClosure::dispatch($session);
+            // P1/P6 : update synchrone du child (last_session_at, score, status)
+            // pour que le dashboard reflète l'état immédiatement, sans worker queue.
+            \App\Jobs\ProcessSessionClosure::dispatchSync($session);
         } catch (\Throwable $e) {
             Log::error('Session analysis failure', [
                 'session' => $session->id,
@@ -166,6 +178,9 @@ class ChatInterface extends Component
                 'zone'           => $this->currentZone,
                 'low_confidence' => true,
             ]);
+            // On lance quand même le calcul de score pour que la dernière session
+            // remonte au dashboard (P1).
+            \App\Jobs\ProcessSessionClosure::dispatchSync($session);
         }
 
         $this->sessionClosed = true;
@@ -191,12 +206,20 @@ class ChatInterface extends Component
         }
 
         try {
+            $level = $this->currentZone === 'red'
+                ? 'critical'
+                : app(\App\Services\AlertLevelResolver::class)->resolve(
+                    $this->currentAlertType,
+                    $this->currentZone,
+                    collect($this->messages)->where('role', 'user')->pluck('content')->all()
+                );
+
             Alert::create([
                 'session_id' => $this->sessionId,
                 'child_id'   => $child->id,
                 'school_id'  => $child->school_id,
                 'type'       => $this->currentAlertType ?? 'detresse',
-                'level'      => $this->currentZone === 'red' ? 'critical' : 'moderate',
+                'level'      => $level,
             ]);
             $this->alertCreated = true;
         } catch (\Throwable $e) {
@@ -214,21 +237,23 @@ class ChatInterface extends Component
      */
     private function safeFallback(string $zone): string
     {
+        // P3 : aucun fallback ne change brusquement de sujet quand l'enfant a
+        // exprimé une émotion. On reste sur la validation + question ouverte.
         $candidates = match ($zone) {
             'red'    => [
                 "Je t'entends. Ce que tu vis est lourd, et tu n'as pas à rester seul avec ça. Est-ce qu'il y a un adulte près de toi à qui tu fais confiance ?",
             ],
             'orange' => [
                 "C'est important ce que tu me dis. Est-ce que ça arrive souvent ?",
-                "Merci de m'avoir confié ça. Tu te sens comment maintenant, juste à l'instant ?",
+                "Merci de m'avoir confié ça. Tu peux me raconter un peu plus ce qui s'est passé ?",
             ],
             'yellow' => [
-                "Je comprends. Qu'est-ce qui t'a le plus pesé aujourd'hui ?",
+                "Je comprends que ça t'ait pesé. Qu'est-ce qui t'a le plus dérangé aujourd'hui ?",
                 "On peut respirer ensemble si tu veux : on inspire 4 secondes, on garde 4 secondes, on souffle 4 secondes. Tu veux essayer ?",
             ],
             default  => [
-                "D'accord. Raconte-moi un peu plus, si tu veux.",
-                "Je t'écoute. Qu'est-ce que tu as fait de chouette aujourd'hui ?",
+                "Je t'écoute. Tu peux me raconter ce qui se passe pour toi en ce moment ?",
+                "D'accord, je suis là. Qu'est-ce que tu aimerais me dire ?",
             ],
         };
 
@@ -241,10 +266,12 @@ class ChatInterface extends Component
      */
     private function safetyMessage(string $ageGroup): string
     {
+        // P11 + P17 : vocabulaire marocain (enseignant, surveillant, responsable
+        // de l'école), numéro 141 uniquement, jamais 15/SAMU/911.
         return match ($ageGroup) {
-            '5-7'   => "Ce que tu me dis est très important. 💛 Tu n'es pas tout seul. Va voir un grand qui s'occupe bien de toi (papa, maman, maîtresse, infirmière) et raconte-lui maintenant.",
-            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à rester seul avec ça. S'il te plaît, va parler à un adulte de confiance maintenant — un parent, un prof, l'infirmière de l'école. Tu peux aussi appeler le 141.",
-            default => "Ce que tu traverses est lourd, et tu n'es pas seul. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, l'infirmière scolaire. Au Maroc tu peux aussi appeler gratuitement le 141. S'il te plaît, ne reste pas seul avec ça.",
+            '5-7'   => "Ce que tu me dis est très important. 💛 Tu n'es pas tout seul. Va voir un grand en qui tu as confiance (papa, maman, ton enseignante, le surveillant ou la dame de l'infirmerie) et raconte-lui maintenant.",
+            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à rester seul avec ça. S'il te plaît, va parler maintenant à un adulte de confiance — un parent, un enseignant, le surveillant, le responsable de l'école ou l'infirmière. Au Maroc tu peux aussi appeler gratuitement le 141.",
+            default => "Ce que tu traverses est lourd, et tu n'es pas seul. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, le responsable de l'école ou l'infirmière. Au Maroc tu peux aussi appeler gratuitement le 141. S'il te plaît, ne reste pas seul avec ça.",
         };
     }
 

@@ -126,6 +126,39 @@ class GeminiServiceParseTest extends TestCase
         $this->assertSame('yellow', $result['zone']);
     }
 
+    /**
+     * P14 : si finish_reason=length, on tronque proprement à la dernière phrase
+     * complète pour ne jamais afficher « Est-ce qu'il y… ».
+     */
+    public function test_chat_truncates_at_last_sentence_when_length_finish(): void
+    {
+        // 1er appel : finish_reason=length avec phrase coupée.
+        // 2nd appel (retry max_tokens=3000) : retourne aussi length avec coupure.
+        Http::fake([
+            '*' => Http::sequence()
+                ->push([
+                    'choices' => [[
+                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: tristesse\nZONE: orange"],
+                        'finish_reason' => 'length',
+                    ]],
+                ], 200)
+                ->push([
+                    'choices' => [[
+                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: tristesse\nZONE: orange"],
+                        'finish_reason' => 'length',
+                    ]],
+                ], 200),
+        ]);
+
+        $result = $this->service()->chat([
+            ['role' => 'user', 'content' => "je suis triste"],
+        ], 10);
+
+        $this->assertStringNotContainsString("Est-ce qu'il y", $result['message']);
+        $this->assertStringContainsString("important", $result['message']);
+        $this->assertSame('orange', $result['zone']);
+    }
+
     public function test_analyze_session_returns_summary_and_zone(): void
     {
         Http::fake([

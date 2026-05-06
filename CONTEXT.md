@@ -129,13 +129,20 @@ backend/                         # Laravel app
 - [x] Schéma BDD
 - [x] Service IA swappable (`AIService` interface + `GeminiService` dev + `ClaudeAIService` stub prod)
 - [ ] Intégration Claude API (prod — ClaudeAIService à implémenter)
-- [x] Chat enfant — **post-QA v2** : SYSTEM_TEMPLATE durci (anti-boucle, mode sécurité, micro-actions, prudence familiale), `chat()` retourne désormais `[message, zone, alert_type, is_critical, low_confidence]`, `CrisisDetector` (filet déterministe FR pour signaux rouge/orange), alertes admin créées en **temps réel** dans `fetchReply()` (idempotence DB), `endSession` protège contre la redescente artificielle de zone via `maxZone(running, analyse)`.
-- [ ] Dashboard admin
-- [x] Tests (62 passed, 204 assertions)
+- [x] Chat enfant — **post-QA v3** (corrections retours tests Probleme CareNest V3) :
+  - SYSTEM_TEMPLATE réécrit (P3, P5, P7, P8, P11, P12, P13, P15, P16, P17, P18, P19, P20) — validation émotion d'abord, vocabulaire 100% marocain (141, enseignant, surveillant, responsable de l'école), confidentialité honnête (jamais "espace secret"), transparence identité (aide virtuelle), interdiction de répéter les mots dévalorisants, gestion conflit physique, orientation rapide vers adulte alternatif quand peur d'un adulte précis, phrase concrète à dire à l'adulte de confiance, pas de fausse excuse "j'ai envoyé trop vite".
+  - `GeminiService::chat()` : `max_tokens` 1200 → 2048, retry à 3000 sur `finish_reason=length`, troncature propre à la dernière phrase complète si toujours coupé (P14).
+  - `ChatInterface` : retire le welcome du contexte IA (P4, dès le 1er fetch), niveau d'alerte calculé par `AlertLevelResolver` selon contexte (P9, P10), `safeFallback` corrigé (plus de "qu'est-ce que tu as fait de chouette aujourd'hui" après tristesse).
+- [x] Dashboard admin (corrections V3) :
+  - `endSession` → `dispatchSync(ProcessSessionClosure)` pour que `last_session_at`, `score_enfant`, `status` du Child se mettent à jour **immédiatement** sans worker queue (P1, P6).
+  - Niveaux d'alerte 4 paliers : low / moderate / high / critical (`AlertLevelResolver` — P9, P10).
+  - Bouton "Paramètres" fonctionnel → page `/settings` (Livewire `Admin\Settings`) éditant seuil d'alerte, notifications email, langue (P2).
+- [x] Tests (70 passed, 214 assertions — +8 tests V3 : AlertLevelResolver, troncature anti-coupure)
 
 ### Réserves QA ouvertes (non bloquantes)
 - Ajouter au moins un test Livewire intégré couvrant `sendMessage → Alert créée → 2e message neutre → pas de 2e Alert` (idempotence run-to-run).
 - Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` — pas de canal push/email implémenté.
+- Tests E2E manuels : reprendre les 20 cas du document `Probleme CareNest V3.docx` après déploiement pour valider la régression.
 
 ---
 

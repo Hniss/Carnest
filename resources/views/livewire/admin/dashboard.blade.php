@@ -12,10 +12,10 @@
             </p>
         </div>
         <div class="flex items-center gap-2">
-            <button class="btn-ghost btn-sm">
+            <a href="{{ route('admin.settings') }}" class="btn-ghost btn-sm">
                 <x-icon name="settings" size="14" />
                 Paramètres
-            </button>
+            </a>
         </div>
     </div>
 
@@ -206,8 +206,17 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-stone-200 shrink-0" aria-hidden="true"></span>
                     @endif
 
-                    <span class="badge {{ $alert->level === 'critical' ? 'badge-danger' : 'badge-warning' }} shrink-0">
-                        {{ $alert->level === 'critical' ? 'Critique' : 'Modérée' }}
+                    @php
+                        $levelMeta = match ($alert->level) {
+                            'critical' => ['cls' => 'badge-danger',  'label' => 'Critique'],
+                            'high'     => ['cls' => 'badge-danger',  'label' => 'Élevée'],
+                            'moderate' => ['cls' => 'badge-warning', 'label' => 'Modérée'],
+                            'low'      => ['cls' => 'badge-success', 'label' => 'Faible'],
+                            default    => ['cls' => 'badge-warning', 'label' => ucfirst((string) $alert->level)],
+                        };
+                    @endphp
+                    <span class="badge {{ $levelMeta['cls'] }} shrink-0">
+                        {{ $levelMeta['label'] }}
                     </span>
 
                     <div class="flex-1 min-w-0">

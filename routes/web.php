@@ -1,5 +1,6 @@
 <?php
 use App\Livewire\Admin\Dashboard;
+use App\Livewire\Admin\Settings as AdminSettings;
 use App\Livewire\Child\ChatInterface;
 use App\Livewire\Child\Login as ChildLogin;
 use Illuminate\Support\Facades\Route;
@@ -14,6 +15,7 @@ Route::get('/', function () {
 // ── Admin (guard web / Breeze) ──────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', Dashboard::class)->name('dashboard');
+    Route::get('/settings', AdminSettings::class)->name('admin.settings');
     Route::permanentRedirect('/admin/dashboard', '/dashboard')->name('admin.dashboard');
 });
 
