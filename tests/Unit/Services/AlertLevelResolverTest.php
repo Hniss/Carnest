@@ -72,4 +72,29 @@ class AlertLevelResolverTest extends TestCase
         $level = $this->resolver->resolve('detresse', 'orange', $messages);
         $this->assertSame('high', $level);
     }
+
+    /**
+     * P10 (V4) — humiliation par un adulte (alert_type=humiliation_adulte) en zone
+     * orange doit produire un niveau 'high' d'office, même sans répétition explicite.
+     */
+    public function test_humiliation_adulte_orange_is_high(): void
+    {
+        $messages = [
+            "ma maîtresse m'insulte et me traite d'idiote",
+        ];
+        $level = $this->resolver->resolve('humiliation_adulte', 'orange', $messages);
+        $this->assertSame('high', $level);
+    }
+
+    /**
+     * P10 (V4) — humiliation par un adulte avec mention de répétition reste high.
+     */
+    public function test_humiliation_adulte_with_repetition_is_high(): void
+    {
+        $messages = [
+            "ma maîtresse m'insulte tous les jours et me dit que je suis nulle",
+        ];
+        $level = $this->resolver->resolve('humiliation_adulte', 'orange', $messages);
+        $this->assertSame('high', $level);
+    }
 }

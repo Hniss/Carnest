@@ -34,10 +34,14 @@ class ChatInterface extends Component
         $welcome = $this->getWelcome($child->age_group);
         $this->messages[] = ['role' => 'assistant', 'content' => $welcome];
 
+        // P2 (V4) : on initialise last_activity_at dès la création — c'est ce
+        // timestamp que le job CloseIdleSessions utilise pour détecter une
+        // inactivité ≥ 5 min et fermer la session proprement.
         $session = ChatSession::create([
-            'child_id'   => $child->id,
-            'school_id'  => $child->school_id,
-            'started_at' => now(),
+            'child_id'         => $child->id,
+            'school_id'        => $child->school_id,
+            'started_at'       => now(),
+            'last_activity_at' => now(),
         ]);
         $this->sessionId = $session->id;
     }
@@ -50,6 +54,17 @@ class ChatInterface extends Component
         $this->input = '';
         $this->messages[] = ['role' => 'user', 'content' => $text];
         $this->isTyping = true;
+
+        // P2 (V4) : on touche last_activity_at + zone à chaque message enfant.
+        // On ne stocke JAMAIS le contenu du message — uniquement le timestamp
+        // et la pire zone observée à ce stade.
+        if ($this->sessionId) {
+            ChatSession::whereKey($this->sessionId)->update([
+                'last_activity_at' => now(),
+                'zone'             => $this->currentZone,
+            ]);
+        }
+
         $this->dispatch('scroll-bottom');
     }
 
@@ -78,7 +93,7 @@ class ChatInterface extends Component
 
         $aiResult = null;
         try {
-            $aiResult = app(AIService::class)->chat($aiMessages, $child->age);
+            $aiResult = app(AIService::class)->chat($aiMessages, $child->age, $child->gender ?? null);
         } catch (\Throwable $e) {
             Log::error('Chat AI failure', [
                 'child_id' => $child->id,
@@ -115,6 +130,17 @@ class ChatInterface extends Component
         $this->isTyping = false;
         $this->dispatch('scroll-bottom');
 
+        // P2 (V4) : on persiste l'état courant de la session — last_activity_at,
+        // pire zone observée, low_confidence selon résultat IA. Permet au job
+        // CloseIdleSessions de finaliser proprement une session abandonnée.
+        if ($this->sessionId) {
+            ChatSession::whereKey($this->sessionId)->update([
+                'last_activity_at' => now(),
+                'zone'             => $this->currentZone,
+                'low_confidence'   => $aiResult['low_confidence'] ?? false,
+            ]);
+        }
+
         // 5) Création d'alerte temps réel (P9, P11, P13).
         $this->maybeCreateAlert($child);
     }
@@ -131,7 +157,7 @@ class ChatInterface extends Component
         $aiMessages = collect($this->messages)->slice(1)->values()->toArray();
 
         try {
-            $analysis = app(AIService::class)->analyzeSession($aiMessages, $child->age);
+            $analysis = app(AIService::class)->analyzeSession($aiMessages, $child->age, $child->gender ?? null);
 
             // On garde la PIRE zone observée pendant la session (P11) :
             // l'IA peut redescendre artificiellement à la fin, on protège ça.
@@ -263,15 +289,20 @@ class ChatInterface extends Component
     /**
      * Message de mode sécurité quand le filet déterministe détecte un signal rouge
      * que l'IA aurait raté (P10, P13).
+     *
+     * P7 + P9 (V4) :
+     *  - vocabulaire 100% Maroc (parent, enseignant, surveillant, responsable de l'école, directeur).
+     *  - PAS de mention « infirmière » (vocabulaire non aligné avec le système marocain).
+     *  - 141 mentionné UNIQUEMENT pour 8-11 et 12-14, et avec formulation conditionnelle
+     *    « si tu ne peux parler à personne tout de suite ». Pour 5-7 on évite le numéro
+     *    (l'enfant ne sait pas appeler) et on oriente vers un adulte présent.
      */
     private function safetyMessage(string $ageGroup): string
     {
-        // P11 + P17 : vocabulaire marocain (enseignant, surveillant, responsable
-        // de l'école), numéro 141 uniquement, jamais 15/SAMU/911.
         return match ($ageGroup) {
-            '5-7'   => "Ce que tu me dis est très important. 💛 Tu n'es pas tout seul. Va voir un grand en qui tu as confiance (papa, maman, ton enseignante, le surveillant ou la dame de l'infirmerie) et raconte-lui maintenant.",
-            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à rester seul avec ça. S'il te plaît, va parler maintenant à un adulte de confiance — un parent, un enseignant, le surveillant, le responsable de l'école ou l'infirmière. Au Maroc tu peux aussi appeler gratuitement le 141.",
-            default => "Ce que tu traverses est lourd, et tu n'es pas seul. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, le responsable de l'école ou l'infirmière. Au Maroc tu peux aussi appeler gratuitement le 141. S'il te plaît, ne reste pas seul avec ça.",
+            '5-7'   => "Ce que tu me dis est très important. 💛 Tu n'es pas tout seul. Va voir un grand en qui tu as confiance (papa, maman, ton enseignant, le surveillant ou le directeur) et raconte-lui maintenant.",
+            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à rester seul avec ça. S'il te plaît, va parler maintenant à un adulte de confiance — un parent, un enseignant, le surveillant ou le responsable de l'école. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 141 au Maroc.",
+            default => "Ce que tu traverses est lourd, et tu n'es pas seul. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, le responsable de l'école ou le directeur. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 141 au Maroc. S'il te plaît, ne reste pas seul avec ça.",
         };
     }
 

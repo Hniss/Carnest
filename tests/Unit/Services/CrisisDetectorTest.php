@@ -87,6 +87,48 @@ class CrisisDetectorTest extends TestCase
         $this->assertSame('green',  $this->detector->maxZone('green',  'green'));
     }
 
+    /**
+     * P10 (V4) — humiliation par un adulte de l'école détectée par CrisisDetector.
+     * "ma maîtresse m'insulte tout le temps et me dit que je suis idiote"
+     * doit ressortir en zone=orange + alert_type=humiliation_adulte.
+     */
+    public function test_orange_zone_on_teacher_humiliation(): void
+    {
+        $result = $this->detector->evaluate(
+            "ma maîtresse m'insulte tout le temps et me dit que je suis idiote",
+            'green'
+        );
+        $this->assertSame('orange', $result['zone']);
+        $this->assertSame('humiliation_adulte', $result['alert_type']);
+        $this->assertTrue($result['matched']);
+    }
+
+    public function test_orange_zone_on_director_humiliation(): void
+    {
+        $result = $this->detector->evaluate(
+            "le directeur m'humilie devant tout le monde",
+            'green'
+        );
+        $this->assertSame('orange', $result['zone']);
+        $this->assertSame('humiliation_adulte', $result['alert_type']);
+    }
+
+    /**
+     * P10 (V4) — Anti-faux-positif : si l'adulte est rapporté comme humiliant
+     * d'AUTRES enfants (pas l'enfant qui parle), on ne déclenche pas
+     * humiliation_adulte. Le pronom m'/me doit être présent et désigner l'enfant.
+     */
+    public function test_does_not_match_when_adult_targets_others(): void
+    {
+        $result = $this->detector->evaluate(
+            "ma maîtresse insulte les autres élèves de la classe",
+            'green'
+        );
+        $this->assertSame('green', $result['zone']);
+        $this->assertNull($result['alert_type']);
+        $this->assertFalse($result['matched']);
+    }
+
     public function test_normalisation_handles_letter_repetition(): void
     {
         // "Trooooop seul" doit matcher "tout seul"-ish via normalisation.

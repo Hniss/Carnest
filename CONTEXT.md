@@ -137,12 +137,26 @@ backend/                         # Laravel app
   - `endSession` → `dispatchSync(ProcessSessionClosure)` pour que `last_session_at`, `score_enfant`, `status` du Child se mettent à jour **immédiatement** sans worker queue (P1, P6).
   - Niveaux d'alerte 4 paliers : low / moderate / high / critical (`AlertLevelResolver` — P9, P10).
   - Bouton "Paramètres" fonctionnel → page `/settings` (Livewire `Admin\Settings`) éditant seuil d'alerte, notifications email, langue (P2).
-- [x] Tests (70 passed, 214 assertions — +8 tests V3 : AlertLevelResolver, troncature anti-coupure)
+- [x] Tests (98 passed, 267 assertions — +28 tests V4 : parseTurn renforcé, gender prompt, ChildStatusResolver, CloseIdleSessions, humiliation_adulte)
+- [x] **Corrections V4** (Probleme CareNest V4 — 12 problèmes en 1 PR) :
+  - **P1** Bouton « J'ai fini ma session » : `type="button"`, hit-area large (px-5 py-2.5 rounded-full), `wire:loading` + `wire:target="endSession"` avec spinner « Je clôture… », `z-10` au-dessus de la barre input, `active:scale-95`, focus ring accessible.
+  - **P2** Sauvegarde session abandonnée : `last_activity_at` sur `chat_sessions` + job `CloseIdleSessions` exécuté toutes les 2 min par `Schedule::call` (synchrone, pas de queue). Ferme les sessions idle ≥ 5 min, crée alerte fallback si zone orange/red, dispatchSync `ProcessSessionClosure`.
+  - **P3** Sidebar : lien « Établissement » → `route('admin.settings')` avec état actif `request()->routeIs('admin.settings')` + `wire:navigate`.
+  - **P4** : `parseTurn` deux phases (extraction stricte + strip total). Strip TOUTES les lignes `ALERT_TYPE / ZONE / RISK_LEVEL / SCORE / CATEGORY / CONFIDENCE` même avec valeurs inattendues (pipes, scores numériques, valeurs inconnues). ALERT_TYPE multi-valeurs `tristesse|isolement` → premier alert_type valide extrait.
+  - **P5** : statut enfant à 4 paliers (`ok`/`a_surveiller`/`a_suivre`/`critique`) via `ChildStatusResolver` avec seuils 70/50/30 + override par alertes critical/high non résolues 7j. Migration MySQL+SQLite. Dashboard reflète les 4 statuts ; carte stat « À suivre » agrège `a_suivre + critique`.
+  - **P6** Couleurs pastilles dashboard : 5 niveaux (critical=rouge+pulse, high=orange, moderate=amber, low=sky, resolved=stone) avec classes badges dédiées `.badge-orange` / `.badge-blue`.
+  - **P7** : suppression de toute mention « infirmière » dans `SYSTEM_TEMPLATE` et `safetyMessage()`. Vocabulaire 100% Maroc.
+  - **P8** : champ `gender` (`m`/`f`/`x`/null) ajouté à `children`, propagé dans `AIService::chat()` et `analyzeSession()`. `GeminiService::buildSystemPrompt()` injecte une directive d'accord de genre stricte (interdit « obligé(e) », « fatigué(e) »). Seeder fixe : Yassine/Omar/Karim=m, Amina/Sara=f.
+  - **P9** : 141 strictement encadré dans le prompt (urgence médicale/danger immédiat uniquement) et conditionnel dans `safetyMessage()` (8-11 et 12-14 seulement, formulation « si tu ne peux parler à personne tout de suite »). 5-7 ans : aucune mention de numéro.
+  - **P10** : nouveau type `humiliation_adulte` (migration enum + `CrisisDetector` patterns prioritaires + `AlertLevelResolver` factor +2 → high d'office). Prompt système classe les insultes par enseignant en orange minimum. Pronom `m'/me` obligatoire dans les patterns (anti-faux-positif « ma maîtresse insulte les autres »).
+  - **UI-1** Logo CareNest : composant `<x-carenest-logo>` (4 variantes PNG) + favicon, déployé dans tous les layouts (`app`, `guest`, `child`) + login enfant + chat header. Plus aucun usage de l'icône `leaf` comme logo (elle reste comme avatar IA dans les bulles de chat).
+  - **UI-2** Welcome enfant : login `livewire/child/login.blade.php` refait en 2 colonnes — panneau gauche `bg-brand-700` avec logo blanc + message bienveillant « Tu n'as pas besoin d'avoir les bons mots. Dis juste ce que tu ressens, comme tu peux. Care est là pour t'écouter avec douceur. 🌿 ». Le panneau loi 09-08 reste sur le login admin (`guest.blade.php`).
 
 ### Réserves QA ouvertes (non bloquantes)
+- Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système) — sans cela les sessions abandonnées ne se ferment pas.
 - Ajouter au moins un test Livewire intégré couvrant `sendMessage → Alert créée → 2e message neutre → pas de 2e Alert` (idempotence run-to-run).
-- Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` — pas de canal push/email implémenté.
-- Tests E2E manuels : reprendre les 20 cas du document `Probleme CareNest V3.docx` après déploiement pour valider la régression.
+- Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` + status — pas de canal push/email implémenté.
+- Tests E2E manuels : reprendre les 10 cas du document `Probleme CareNest V4` après déploiement pour valider la régression.
 
 ---
 

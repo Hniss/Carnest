@@ -38,7 +38,7 @@ class MigrationsTest extends TestCase
         $this->assertTrue(Schema::hasTable('children'));
         foreach ([
             'id','school_id','name','email','password',
-            'age','age_group','classe','score_enfant',
+            'age','age_group','classe','gender','score_enfant',
             'status','last_session_at','remember_token',
             'created_at','updated_at',
         ] as $col) {
@@ -52,7 +52,7 @@ class MigrationsTest extends TestCase
         foreach ([
             'id','child_id','school_id','zone',
             'ai_summary','low_confidence',
-            'started_at','ended_at','created_at','updated_at',
+            'started_at','ended_at','last_activity_at','created_at','updated_at',
         ] as $col) {
             $this->assertTrue(Schema::hasColumn('chat_sessions', $col), "Missing column: $col");
         }

@@ -46,7 +46,7 @@
             @php
                 $statCards = [
                     ['label' => 'Élèves',         'value' => $children->count()],
-                    ['label' => 'À suivre',       'value' => $children->where('status', 'a_suivre')->count()],
+                    ['label' => 'À suivre',       'value' => $children->whereIn('status', ['a_suivre', 'critique'])->count()],
                     ['label' => 'Alertes vives',  'value' => $unreadCount],
                     ['label' => 'Sessions 7j',    'value' => $children->whereNotNull('last_session_at')
                                                                      ->where('last_session_at', '>=', now()->subDays(7))->count()],
@@ -147,17 +147,18 @@
                                 {{ $child->score_enfant !== null ? round($child->score_enfant) : '—' }}
                             </td>
                             <td>
-                                @if ($child->status === 'a_suivre')
-                                    <span class="badge badge-warning">
-                                        <span class="badge-dot bg-amber-500"></span>
-                                        À suivre
-                                    </span>
-                                @else
-                                    <span class="badge badge-success">
-                                        <span class="badge-dot bg-brand-500"></span>
-                                        Stable
-                                    </span>
-                                @endif
+                                @php
+                                    $statusMeta = match($child->status) {
+                                        'critique'     => ['label' => 'Critique',    'cls' => 'badge-danger',  'dot' => 'bg-red-500'],
+                                        'a_suivre'     => ['label' => 'À suivre',    'cls' => 'badge-orange',  'dot' => 'bg-orange-500'],
+                                        'a_surveiller' => ['label' => 'À surveiller','cls' => 'badge-warning', 'dot' => 'bg-amber-400'],
+                                        default        => ['label' => 'Stable',      'cls' => 'badge-success', 'dot' => 'bg-brand-500'],
+                                    };
+                                @endphp
+                                <span class="badge {{ $statusMeta['cls'] }}">
+                                    <span class="badge-dot {{ $statusMeta['dot'] }}"></span>
+                                    {{ $statusMeta['label'] }}
+                                </span>
                             </td>
                             <td class="text-stone-500 text-sm">
                                 {{ $child->last_session_at ? $child->last_session_at->diffForHumans() : 'Aucune' }}
@@ -200,19 +201,26 @@
         <div class="divide-y divide-stone-100">
             @forelse ($alerts as $alert)
                 <div class="px-6 py-4 flex items-center gap-4">
-                    @if ($alert->status === 'unread')
-                        <span class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" aria-label="non traitée"></span>
-                    @else
-                        <span class="w-1.5 h-1.5 rounded-full bg-stone-200 shrink-0" aria-hidden="true"></span>
-                    @endif
+                    {{-- Pastille couleur par level (P6) --}}
+                    @php
+                        $dotMeta = match ($alert->status === 'resolved' ? 'resolved' : $alert->level) {
+                            'critical' => ['cls' => 'bg-red-500 animate-pulse', 'aria' => 'critique'],
+                            'high'     => ['cls' => 'bg-orange-500',            'aria' => 'élevée'],
+                            'moderate' => ['cls' => 'bg-amber-400',             'aria' => 'modérée'],
+                            'low'      => ['cls' => 'bg-sky-400',               'aria' => 'faible'],
+                            'resolved' => ['cls' => 'bg-stone-200',             'aria' => 'résolue'],
+                            default    => ['cls' => 'bg-stone-300',             'aria' => 'alerte'],
+                        };
+                    @endphp
+                    <span class="w-2 h-2 rounded-full {{ $dotMeta['cls'] }} shrink-0" aria-label="{{ $dotMeta['aria'] }}"></span>
 
                     @php
                         $levelMeta = match ($alert->level) {
                             'critical' => ['cls' => 'badge-danger',  'label' => 'Critique'],
-                            'high'     => ['cls' => 'badge-danger',  'label' => 'Élevée'],
+                            'high'     => ['cls' => 'badge-orange',  'label' => 'Élevée'],
                             'moderate' => ['cls' => 'badge-warning', 'label' => 'Modérée'],
-                            'low'      => ['cls' => 'badge-success', 'label' => 'Faible'],
-                            default    => ['cls' => 'badge-warning', 'label' => ucfirst((string) $alert->level)],
+                            'low'      => ['cls' => 'badge-blue',    'label' => 'Faible'],
+                            default    => ['cls' => 'badge-neutral', 'label' => ucfirst((string) $alert->level)],
                         };
                     @endphp
                     <span class="badge {{ $levelMeta['cls'] }} shrink-0">

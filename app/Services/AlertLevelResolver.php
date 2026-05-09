@@ -48,6 +48,17 @@ class AlertLevelResolver
     ];
 
     /**
+     * P10 (V4) — Humiliation par un adulte de l'école.
+     * Indicateurs lexicaux qu'un adulte (enseignant, directeur, surveillant) humilie l'enfant.
+     * Une seule détection suffit à pousser l'alerte en 'high' (combinée avec alert_type=humiliation_adulte).
+     */
+    private const HIGH_ADULT_HUMILIATION = [
+        // Le pronom m'/me est OBLIGATOIRE pour ne pas matcher "ma maîtresse insulte les autres" (rapport tiers).
+        '\b(ma\s+ma[îi]tresse|mon\s+(prof|enseignant)|mon\s+enseignante|le\s+directeur|la\s+directrice|le\s+surveillant)\s+m[\'e]\s*(insulte|humilie|crie\s+dessus|rabaisse|traite\s+d[\'e]\s*idiot)\b',
+        '\b(elle|il)\s+me\s+(dit\s+que\s+je\s+suis|appelle)\s+(idiot|nul|b[êe]te|imb[eé]cile)\b',
+    ];
+
+    /**
      * @param array<int,string> $childMessages Messages bruts de l'enfant — utilisés en mémoire uniquement.
      */
     public function resolve(?string $alertType, string $zone, array $childMessages): string
@@ -87,6 +98,17 @@ class AlertLevelResolver
 
         // Cas spéciaux : détresse et danger en orange basculent vite en high
         if (in_array($alertType, ['detresse', 'danger'], true)) {
+            $factors += 1;
+        }
+
+        // P10 (V4) — Humiliation par un adulte de l'école.
+        // Si le type est explicitement humiliation_adulte, on pousse direct en high (factors += 2).
+        // En complément, si le lexique d'humiliation par adulte est présent dans les messages,
+        // on ajoute encore +1 (cumulable avec la répétition pour rester high).
+        if ($alertType === 'humiliation_adulte') {
+            $factors += 2;
+        }
+        if ($this->matchAny($haystack, self::HIGH_ADULT_HUMILIATION)) {
             $factors += 1;
         }
 

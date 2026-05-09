@@ -10,15 +10,16 @@ class ChatSession extends Model
     protected $fillable = [
         'child_id', 'school_id', 'zone',
         'ai_summary', 'low_confidence',
-        'started_at', 'ended_at',
+        'started_at', 'ended_at', 'last_activity_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'low_confidence' => 'boolean',
-            'started_at'     => 'datetime',
-            'ended_at'       => 'datetime',
+            'low_confidence'   => 'boolean',
+            'started_at'       => 'datetime',
+            'ended_at'         => 'datetime',
+            'last_activity_at' => 'datetime',
         ];
     }
 

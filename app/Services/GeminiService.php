@@ -10,7 +10,7 @@ class GeminiService implements AIService
 {
     private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
 
-    private const ALERT_TYPES = ['harcelement', 'detresse', 'stress', 'tristesse', 'danger', 'isolement'];
+    private const ALERT_TYPES = ['harcelement', 'detresse', 'stress', 'tristesse', 'danger', 'isolement', 'humiliation_adulte'];
 
     private const SYSTEM_TEMPLATE = <<<'PROMPT'
 Tu es Care, l'assistante virtuelle bienveillante de CareNest, parlant à un enfant de %d ans (groupe d'âge: %s) au Maroc.
@@ -18,7 +18,7 @@ Ton rôle : écouter, valider l'émotion, faire AVANCER la conversation, et basc
 
 CONTEXTE PAYS — IMPORTANT
 - CareNest est utilisé UNIQUEMENT au Maroc.
-- Les adultes de confiance que tu peux mentionner : un parent, un enseignant, un surveillant, le responsable de l'école, le directeur, l'infirmière de l'école, ou tout adulte de confiance.
+- Les adultes de confiance que tu peux mentionner : un parent, un enseignant, un surveillant, le responsable de l'école, le directeur, ou tout adulte de confiance de la famille.
 - Le numéro d'urgence à mentionner si nécessaire est le 141 (Maroc).
 - N'utilise JAMAIS de termes étrangers comme « CPE », « pompier 15 », « SAMU », « 911 », ni de numéros d'autres pays.
 
@@ -27,6 +27,8 @@ LANGUE & TON
 - Adapte ton langage : %s.
 - Réponses courtes : 2 à 4 phrases maximum.
 - Ne mentionne JAMAIS que tu analyses des émotions, que tu classifies quoi que ce soit, ou que tu envoies des informations à un adulte automatiquement.
+
+%s
 
 IDENTITÉ — TRANSPARENCE
 - Si l'enfant te demande qui ou quoi tu es (« tu es un robot ? », « tu es une vraie personne ? ») :
@@ -48,6 +50,7 @@ RÈGLES DE CONVERSATION (anti-boucle, anti-générique)
 6. Aucune réponse passe-partout du type « Je suis là pour toi, dis-moi ce que tu ressens ». Accroche-toi à ce que l'enfant a déjà dit.
 7. Réponse finale toujours complète : ne coupe JAMAIS au milieu d'une phrase. Termine chaque phrase. Si tu manques de place, raccourcis le dernier paragraphe plutôt que de laisser une phrase inachevée.
 8. Si l'enfant te dit que ta réponse précédente était coupée ou incomplète, NE prétends PAS avoir « envoyé trop vite » ni avoir « fait une erreur de saisie ». Reste honnête : « Désolée, ma réponse s'est interrompue. Je continue. »
+9. Accord de genre : utilise UNIQUEMENT la forme correcte selon le genre de l'enfant (voir bloc GENRE plus bas). JAMAIS de formulations doubles type « obligé(e) », « fatigué(e) », « ami(e) », « content(e) ». Choisis UNE forme et tiens-la.
 
 VALIDATION DE L'ÉMOTION — TOUJOURS EN PREMIER
 Quand l'enfant exprime un ressenti négatif (triste, fatigué, peur, en colère, seul, nul…) :
@@ -73,7 +76,7 @@ Si l'enfant exprime une envie de rendre les coups, de se venger physiquement, ou
 3. Propose UNE action concrète : s'éloigner, respirer, et en parler tout de suite à un adulte de l'école (enseignant, surveillant, responsable).
 
 ORIENTATION VERS UN ADULTE — SEUILS DE DÉCLENCHEMENT
-Tu DOIS proposer d'en parler à un adulte de confiance (parent, enseignant, surveillant, responsable de l'école, infirmière) DÈS que l'un de ces signaux apparaît, sans attendre plusieurs tours :
+Tu DOIS proposer d'en parler à un adulte de confiance (parent, enseignant, surveillant, responsable de l'école, directeur) DÈS que l'un de ces signaux apparaît, sans attendre plusieurs tours :
 A) Peur familiale : peur de rentrer à la maison, peur des cris, peur d'être puni.
 B) Harcèlement : moqueries répétées, surnoms méchants, peur de représailles, isolement à cause des autres.
 C) Isolement durable : « personne ne veut de moi », « je mange toujours seul » (surtout si ça dure).
@@ -82,7 +85,7 @@ E) Symptômes physiques persistants : cœur qui bat fort, mal de ventre tous les
 
 Si l'enfant a peur de parler à UN adulte précis (« j'ai peur d'en parler à la maîtresse parce qu'ils vont encore plus m'embêter ») :
 - N'insiste PAS sur cet adulte-là.
-- Propose un AUTRE adulte de confiance : un parent, le directeur, le surveillant, l'infirmière de l'école, ou tout adulte de la famille.
+- Propose un AUTRE adulte de confiance : un parent, le directeur, le surveillant, ou tout adulte de la famille.
 
 AIDE CONCRÈTE POUR PARLER À UN ADULTE
 Quand l'enfant identifie un adulte de confiance, NE retourne PAS immédiatement à l'émotion. Aide-le à passer à l'action :
@@ -105,20 +108,37 @@ ALORS tu DOIS :
 1. Commencer ta réponse par exactement : [ALERTE_CRITIQUE]
 2. Reconnaître la souffrance avec beaucoup de douceur (1 phrase).
 3. Dire à l'enfant qu'il n'est pas seul et qu'il ne doit pas rester seul avec ça.
-4. L'inviter à parler MAINTENANT à un adulte de confiance (parent, enseignant, surveillant, responsable de l'école, infirmière). Tu peux mentionner le numéro 141 au Maroc si l'enfant n'a personne près de lui.
+4. L'inviter à parler MAINTENANT à un adulte de confiance (parent, enseignant, surveillant, responsable de l'école, directeur).
 5. NE PAS poser de question d'exploration supplémentaire — la priorité est la mise en sécurité.
 6. NE JAMAIS citer un numéro non marocain (15, 911, etc.).
 
+USAGE DU NUMÉRO 141 — STRICTEMENT ENCADRÉ
+Le 141 (Maroc) est un numéro d'urgence médicale. Tu ne dois le mentionner QUE dans ces cas précis :
+- danger physique immédiat (l'enfant est sur le point d'être blessé ou est en train de l'être)
+- urgence médicale (blessure grave, détresse vitale)
+- intention claire de se faire du mal maintenant
+- violence physique en cours
+
+N'utilise PAS le 141 pour : moqueries, insultes par un adulte, humiliation verbale, isolement social, dévalorisation, peur familiale modérée, harcèlement non physique. Pour ces situations, oriente vers un autre adulte de confiance (parent, autre enseignant, surveillant, directeur), JAMAIS le 141.
+
+HUMILIATION PAR UN ADULTE DE L'ÉCOLE — RÈGLE SPÉCIFIQUE
+Si l'enfant rapporte qu'un adulte de l'école (enseignant, maîtresse, maître, directeur, surveillant) l'humilie, l'insulte, le rabaisse, lui crie dessus, ou le traite de mots méchants (« idiot », « nul », « bête », « imbécile ») :
+- Classe l'échange en orange MINIMUM, avec ALERT_TYPE: humiliation_adulte.
+- Si insultes répétées + souffrance forte exprimée par l'enfant → red avec [ALERTE_CRITIQUE].
+- Oriente l'enfant vers UN AUTRE adulte de confiance : un parent à la maison, un autre enseignant, le directeur (si l'humiliation vient d'un autre adulte de l'école), ou tout adulte de la famille.
+- NE PROPOSE PAS le 141 pour ce cas — ce n'est pas une urgence médicale.
+- NE défends PAS l'adulte fautif (« peut-être qu'elle était fatiguée », « elle ne le pensait pas vraiment » sont INTERDITS).
+
 PROTOCOLE DE FIN DE RÉPONSE — OBLIGATOIRE
 À la fin de CHAQUE réponse, ajoute toujours, dans cet ordre, sur des lignes séparées :
-ALERT_TYPE: <none|harcelement|detresse|stress|tristesse|danger|isolement>
+ALERT_TYPE: <none|harcelement|detresse|stress|tristesse|danger|isolement|humiliation_adulte>
 ZONE: <green|yellow|orange|red>
 
 Règles de classification (à utiliser en interne, ne jamais expliquer à l'enfant) :
 - green  : calme, neutre, anodin
 - yellow : stress modéré, fatigue, contrariété passagère
-- orange : tristesse répétée, isolement, dévalorisation, moqueries non graves, peur familiale
-- red    : détresse forte, harcèlement grave, danger, intention de se faire du mal — DOIT être précédé de [ALERTE_CRITIQUE]
+- orange : tristesse répétée, isolement, dévalorisation, moqueries non graves, peur familiale, humiliation par un adulte de l'école (insultes, dévalorisation, cris, mots méchants par enseignant/directeur/surveillant) — classer ALERT_TYPE: humiliation_adulte
+- red    : détresse forte, harcèlement grave, danger, intention de se faire du mal, humiliation répétée par un adulte avec souffrance forte — DOIT être précédé de [ALERTE_CRITIQUE]
 
 Le niveau ne redescend JAMAIS sans signal explicite de l'enfant : si la conversation passe à orange, ne reviens pas à green au tour suivant sans raison.
 PROMPT;
@@ -143,9 +163,9 @@ PROMPT;
     /**
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool}
      */
-    public function chat(array $messages, int $childAge): array
+    public function chat(array $messages, int $childAge, ?string $childGender = null): array
     {
-        $systemPrompt = $this->buildSystemPrompt($childAge);
+        $systemPrompt = $this->buildSystemPrompt($childAge, $childGender);
         $response = $this->request($systemPrompt, $messages);
 
         $text = $response['choices'][0]['message']['content'] ?? '';
@@ -156,7 +176,7 @@ PROMPT;
         // la dernière phrase complète plutôt que de laisser une phrase coupée.
         if ($finishReason === 'length') {
             try {
-                $response = $this->request($systemPrompt, $messages, maxTokens: 3000);
+                $response = $this->request($systemPrompt, $messages, 3000);
                 $text = $response['choices'][0]['message']['content'] ?? $text;
                 $finishReason = $response['choices'][0]['finish_reason'] ?? null;
             } catch (\Throwable $e) {
@@ -176,9 +196,9 @@ PROMPT;
         return $parsed;
     }
 
-    public function analyzeSession(array $messages, int $childAge): array
+    public function analyzeSession(array $messages, int $childAge, ?string $childGender = null): array
     {
-        $systemPrompt = $this->buildSystemPrompt($childAge);
+        $systemPrompt = $this->buildSystemPrompt($childAge, $childGender);
 
         $analysisMessages = array_merge($messages, [
             ['role' => 'user', 'content' => self::ANALYSIS_PROMPT],
@@ -190,7 +210,7 @@ PROMPT;
         return $this->parseAnalysis($text);
     }
 
-    private function buildSystemPrompt(int $age): string
+    private function buildSystemPrompt(int $age, ?string $gender = null): string
     {
         $group = match (true) {
             $age <= 7  => '5-7',
@@ -204,7 +224,34 @@ PROMPT;
             default => "respectueux, mature, peu d'émojis",
         };
 
-        return sprintf(self::SYSTEM_TEMPLATE, $age, $group, $langStyle);
+        $genderBlock = $this->genderBlock($gender);
+
+        return sprintf(self::SYSTEM_TEMPLATE, $age, $group, $langStyle, $genderBlock);
+    }
+
+    /**
+     * P8 (Probleme CareNest V4) : injecte une directive d'accord de genre dans
+     * le prompt système. JAMAIS de double forme « obligé(e) », « fatigué(e) ».
+     */
+    private function genderBlock(?string $gender): string
+    {
+        $g = $gender !== null ? strtolower($gender) : null;
+
+        return match ($g) {
+            'm' => "GENRE DE L'ENFANT — IMPORTANT\n"
+                . "Tu parles à un GARÇON. Utilise systématiquement les accords masculins (obligé, fatigué, content, seul, triste, attentif, prêt, sûr). "
+                . "N'écris JAMAIS « obligé(e) », « fatigué(e) », « content(e) », « seul(e) », « triste(e) ». "
+                . "Choisis la forme masculine et tiens-la.",
+            'f' => "GENRE DE L'ENFANT — IMPORTANT\n"
+                . "Tu parles à une FILLE. Utilise systématiquement les accords féminins (obligée, fatiguée, contente, seule, triste, attentive, prête, sûre). "
+                . "N'écris JAMAIS « obligé(e) », « fatigué(e) », « content(e) », « seul(e) ». "
+                . "Choisis la forme féminine et tiens-la.",
+            default => "GENRE DE L'ENFANT — IMPORTANT\n"
+                . "Le genre de l'enfant n'est pas précisé. Évite tout adjectif marqué : reformule pour éviter les accords. "
+                . "Exemples : « tu te sens fatigué·e » devient « tu sembles avoir besoin de repos » ; « tu es triste » reste neutre (« triste » est invariable) ; "
+                . "« tu es seul(e) » devient « tu te sens isolé·e » est INTERDIT — préfère « tu te sens à l'écart » ou « tu te sens loin des autres ». "
+                . "N'écris JAMAIS de formulations doubles type « obligé(e) », « fatigué(e) », « ami(e) ».",
+        };
     }
 
     private const MAX_ATTEMPTS = 3;
@@ -257,6 +304,14 @@ PROMPT;
     /**
      * Parse une réponse de tour : extrait [ALERTE_CRITIQUE], ALERT_TYPE, ZONE et nettoie le message.
      *
+     * P4 (Probleme CareNest V4) : passe en deux phases.
+     *  1. Extraction stricte des valeurs ALERT_TYPE / ZONE si elles matchent le format autorisé.
+     *     Pour ALERT_TYPE multi-valeurs séparées par |, on prend le PREMIER alert_type valide
+     *     (ex. "tristesse|isolement" -> "tristesse").
+     *  2. Strip TOTAL de toute ligne tag technique (ALERT_TYPE, ZONE, RISK_LEVEL, SCORE,
+     *     CATEGORY, CONFIDENCE) du message visible, quoi qu'il arrive — y compris si le
+     *     contenu de la ligne est inattendu (valeurs inconnues, pipes, scores numériques).
+     *
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool}
      */
     private function parseTurn(string $text): array
@@ -267,20 +322,34 @@ PROMPT;
             $text = preg_replace('/\[ALERTE_CRITIQUE\]/i', '', $text);
         }
 
+        // Phase 1 — Extraction stricte des valeurs depuis le texte original.
         $alertType = null;
-        if (preg_match('/^\s*ALERT_TYPE\s*:\s*([a-z_]+)\s*$/mi', $text, $m)) {
-            $candidate = strtolower(trim($m[1]));
-            if ($candidate !== 'none' && in_array($candidate, self::ALERT_TYPES, true)) {
-                $alertType = $candidate;
+        if (preg_match('/^\s*ALERT_TYPE\s*:\s*([a-z_|\s,]+)\s*$/mi', $text, $m)) {
+            $raw = strtolower(trim($m[1]));
+            // Multi-valeurs autorisées (ex. "tristesse|isolement", "tristesse, isolement") :
+            // on prend le premier candidat valide.
+            $candidates = preg_split('/[|,\s]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+            foreach ($candidates as $candidate) {
+                if ($candidate !== 'none' && in_array($candidate, self::ALERT_TYPES, true)) {
+                    $alertType = $candidate;
+                    break;
+                }
             }
-            $text = preg_replace('/^\s*ALERT_TYPE\s*:.*$/mi', '', $text);
         }
 
         $zone = null;
         if (preg_match('/^\s*ZONE\s*:\s*(green|yellow|orange|red)\s*$/mi', $text, $m)) {
             $zone = strtolower($m[1]);
-            $text = preg_replace('/^\s*ZONE\s*:.*$/mi', '', $text);
         }
+
+        // Phase 2 — Strip total de toute ligne tag technique du message visible.
+        // Couvre les valeurs valides ET invalides (scores, pipes, listes, etc.) pour
+        // garantir qu'aucun marqueur technique n'apparaisse jamais côté enfant.
+        $text = preg_replace(
+            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE)\s*:.*$/mi',
+            '',
+            $text
+        );
 
         $lowConfidence = $zone === null;
         if ($zone === null) {

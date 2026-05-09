@@ -3,6 +3,7 @@ namespace App\Jobs;
 
 use App\Models\ChatSession;
 use App\Models\Child;
+use App\Services\ChildStatusResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,7 +23,7 @@ class ProcessSessionClosure implements ShouldQueue
 
     public function __construct(private readonly ChatSession $session) {}
 
-    public function handle(): void
+    public function handle(ChildStatusResolver $statusResolver): void
     {
         $child = $this->session->child;
 
@@ -31,9 +32,8 @@ class ProcessSessionClosure implements ShouldQueue
         $child->score_enfant    = $scoreEnfant;
         $child->last_session_at = $this->session->ended_at;
 
-        if ($scoreEnfant !== null) {
-            $child->status = $scoreEnfant < 50 ? 'a_suivre' : 'ok';
-        }
+        // P5 (V4) : statut à 4 paliers, override par alertes critical/high non résolues 7j.
+        $child->status = $statusResolver->resolve($scoreEnfant, $child);
 
         $child->save();
     }

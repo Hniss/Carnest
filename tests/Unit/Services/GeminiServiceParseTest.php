@@ -159,6 +159,122 @@ class GeminiServiceParseTest extends TestCase
         $this->assertSame('orange', $result['zone']);
     }
 
+    /**
+     * P4 (V4) — ALERT_TYPE multi-valeurs séparées par "|" (cas réel observé) :
+     * la ligne entière doit être strippée du message visible et le premier
+     * alert_type valide doit être extrait.
+     */
+    public function test_chat_strips_compound_alert_type_with_pipe(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->makeResponseBody(
+                "Je comprends que tu te sentes triste et seul.\n"
+                . "ALERT_TYPE: tristesse|isolement\n"
+                . "ZONE: orange"
+            )),
+        ]);
+
+        $result = $this->service()->chat([
+            ['role' => 'user', 'content' => 'je suis triste et seul'],
+        ], 10);
+
+        $this->assertStringNotContainsString('ALERT_TYPE', $result['message']);
+        $this->assertStringNotContainsString('tristesse|isolement', $result['message']);
+        $this->assertStringNotContainsString('|', $result['message']);
+        $this->assertSame('tristesse', $result['alert_type']);
+        $this->assertSame('orange', $result['zone']);
+    }
+
+    /**
+     * P4 (V4) — Tags techniques inconnus (RISK_LEVEL, CATEGORY, SCORE, CONFIDENCE) :
+     * doivent être strippés du message visible quoi qu'il arrive.
+     */
+    public function test_chat_strips_unknown_technical_tags(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->makeResponseBody(
+                "Je t'écoute, raconte-moi ce qui s'est passé.\n"
+                . "RISK_LEVEL: 0.8\n"
+                . "CATEGORY: bullying\n"
+                . "SCORE: 35\n"
+                . "CONFIDENCE: high\n"
+                . "ALERT_TYPE: harcelement\n"
+                . "ZONE: orange"
+            )),
+        ]);
+
+        $result = $this->service()->chat([
+            ['role' => 'user', 'content' => 'on me harcèle'],
+        ], 10);
+
+        $this->assertStringNotContainsString('RISK_LEVEL', $result['message']);
+        $this->assertStringNotContainsString('CATEGORY', $result['message']);
+        $this->assertStringNotContainsString('SCORE', $result['message']);
+        $this->assertStringNotContainsString('CONFIDENCE', $result['message']);
+        $this->assertStringNotContainsString('bullying', $result['message']);
+        $this->assertStringNotContainsString('0.8', $result['message']);
+        $this->assertSame('harcelement', $result['alert_type']);
+        $this->assertSame('orange', $result['zone']);
+    }
+
+    /**
+     * P8 (V4) — directive d'accord de genre injectée dans le system prompt
+     * selon le gender passé. On utilise Http::assertSent pour inspecter le payload.
+     */
+    public function test_chat_injects_masculine_gender_directive(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->makeResponseBody("Salut !\nALERT_TYPE: none\nZONE: green")),
+        ]);
+
+        $this->service()->chat([
+            ['role' => 'user', 'content' => 'bonjour'],
+        ], 10, 'm');
+
+        Http::assertSent(function ($request) {
+            $system = collect($request->data()['messages'] ?? [])
+                ->firstWhere('role', 'system')['content'] ?? '';
+            return str_contains($system, 'GARÇON')
+                && str_contains($system, 'accords masculins');
+        });
+    }
+
+    public function test_chat_injects_feminine_gender_directive(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->makeResponseBody("Salut !\nALERT_TYPE: none\nZONE: green")),
+        ]);
+
+        $this->service()->chat([
+            ['role' => 'user', 'content' => 'bonjour'],
+        ], 10, 'f');
+
+        Http::assertSent(function ($request) {
+            $system = collect($request->data()['messages'] ?? [])
+                ->firstWhere('role', 'system')['content'] ?? '';
+            return str_contains($system, 'FILLE')
+                && str_contains($system, 'accords féminins');
+        });
+    }
+
+    public function test_chat_injects_neutral_gender_directive_when_null(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->makeResponseBody("Salut !\nALERT_TYPE: none\nZONE: green")),
+        ]);
+
+        $this->service()->chat([
+            ['role' => 'user', 'content' => 'bonjour'],
+        ], 10, null);
+
+        Http::assertSent(function ($request) {
+            $system = collect($request->data()['messages'] ?? [])
+                ->firstWhere('role', 'system')['content'] ?? '';
+            return str_contains($system, "n'est pas précisé")
+                && str_contains($system, 'Évite tout adjectif marqué');
+        });
+    }
+
     public function test_analyze_session_returns_summary_and_zone(): void
     {
         Http::fake([

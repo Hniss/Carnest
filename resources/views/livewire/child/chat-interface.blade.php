@@ -4,15 +4,10 @@
 
     {{-- Header --}}
     <header class="bg-white/80 backdrop-blur border-b border-stone-200 px-5 py-3.5 flex items-center justify-between sticky top-0 z-10">
-        <div class="flex items-center gap-2.5">
-            <span class="w-8 h-8 rounded-lg bg-brand-700 text-white flex items-center justify-center">
-                <x-icon name="leaf" size="18" />
-            </span>
-            <div>
-                <div class="font-display font-extrabold text-[15px] text-stone-900 leading-none">CareNest</div>
-                <div class="text-[11px] text-stone-500 mt-0.5">Avec Care</div>
-            </div>
-        </div>
+        <a href="{{ route('child.chat') }}" class="flex items-center gap-2.5">
+            <x-carenest-logo variant="full" class="h-8 w-auto" />
+            <span class="hidden sm:inline-block text-[11px] text-stone-500 border-l border-stone-200 pl-2.5">Avec Care</span>
+        </a>
         <div class="flex items-center gap-3">
             <span class="text-sm text-stone-500 hidden sm:inline">
                 Bonjour, <span class="text-stone-900 font-medium">{{ auth('child')->user()->name }}</span>
@@ -83,10 +78,31 @@
                     </button>
                 </form>
             </div>
-            <div class="flex justify-center mt-2.5">
-                <button wire:click="endSession"
-                        class="text-xs text-stone-400 hover:text-brand-700 transition-colors font-medium">
-                    J'ai fini ma session
+            <div class="flex justify-center mt-3">
+                <button type="button"
+                        wire:click="endSession"
+                        wire:loading.attr="disabled"
+                        wire:target="endSession"
+                        class="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full
+                               bg-white border border-stone-200 text-stone-600
+                               hover:bg-brand-50 hover:border-brand-200 hover:text-brand-800
+                               active:scale-95 transition-all duration-150
+                               shadow-sm hover:shadow-card
+                               text-sm font-medium
+                               disabled:opacity-60 disabled:cursor-wait
+                               focus:outline-none focus:ring-4 focus:ring-brand-700/15
+                               z-10">
+                    <span wire:loading.remove wire:target="endSession" class="inline-flex items-center gap-2">
+                        <x-icon name="check-circle" size="16" />
+                        J'ai fini ma session
+                    </span>
+                    <span wire:loading wire:target="endSession" class="inline-flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-brand-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="9" stroke-opacity="0.25"/>
+                            <path d="M21 12a9 9 0 0 0-9-9" stroke-linecap="round"/>
+                        </svg>
+                        Je clôture…
+                    </span>
                 </button>
             </div>
         </div>

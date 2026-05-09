@@ -9,12 +9,12 @@ class ClaudeAIService implements AIService
         private readonly string $model = 'claude-sonnet-4-20250514',
     ) {}
 
-    public function chat(array $messages, int $childAge): array
+    public function chat(array $messages, int $childAge, ?string $childGender = null): array
     {
         throw new \RuntimeException('ClaudeAIService not implemented yet — use GeminiService for dev');
     }
 
-    public function analyzeSession(array $messages, int $childAge): array
+    public function analyzeSession(array $messages, int $childAge, ?string $childGender = null): array
     {
         throw new \RuntimeException('ClaudeAIService not implemented yet — use GeminiService for dev');
     }

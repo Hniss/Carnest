@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'CareNest') }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,11 +28,8 @@
             </svg>
         </div>
 
-        <a href="/" class="relative inline-flex items-center gap-2.5">
-            <span class="w-9 h-9 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center">
-                <x-icon name="leaf" size="20" />
-            </span>
-            <span class="font-display font-extrabold text-xl tracking-tight">CareNest</span>
+        <a href="/" class="relative inline-flex items-center">
+            <x-carenest-logo variant="full-white" class="h-10 w-auto" />
         </a>
 
         <div class="relative mt-auto max-w-md">
@@ -49,11 +47,8 @@
     {{-- Right: form --}}
     <div class="flex flex-col items-center justify-center px-6 py-12">
         <div class="w-full max-w-[400px]">
-            <div class="lg:hidden mb-8 flex items-center gap-2.5">
-                <span class="w-9 h-9 rounded-lg bg-brand-700 text-white flex items-center justify-center">
-                    <x-icon name="leaf" size="20" />
-                </span>
-                <span class="font-display font-extrabold text-xl tracking-tight">CareNest</span>
+            <div class="lg:hidden mb-8 flex items-center">
+                <x-carenest-logo variant="full" class="h-9 w-auto" />
             </div>
 
             {{ $slot }}

@@ -28,6 +28,15 @@ class CrisisDetector
 
     /** Phrases « orange » : signaux importants mais pas critiques en eux-mêmes. */
     private const ORANGE_PATTERNS = [
+        // P10 (V4) — Humiliation par un adulte de l'école.
+        // Important : ces patterns sont placés AVANT les patterns harcèlement génériques
+        // pour ne pas être absorbés par "ils m'insultent".
+        // Le pronom "m'/me" est OBLIGATOIRE pour éviter les faux positifs comme
+        // "ma maîtresse insulte les autres" (l'enfant rapporte mais n'est pas la victime).
+        ['type' => 'humiliation_adulte', 'rx' => '\b(ma\s+ma[îi]tresse|mon\s+ma[îi]tre|mon\s+(prof|enseignant)|mon\s+enseignante|le\s+directeur|la\s+directrice|le\s+surveillant|la\s+surveillante)\s+m[\'e]\s*(insulte|humilie|crie|hurle|traite|rabaisse)\b'],
+        ['type' => 'humiliation_adulte', 'rx' => '\b(ma\s+ma[îi]tresse|mon\s+(prof|enseignant)|mon\s+enseignante)\s+.{0,30}\b(idiot|nul|b[êe]te|imb[eé]cile|stupide)\b'],
+        ['type' => 'humiliation_adulte', 'rx' => '\b(elle|il)\s+m[\'e]\s*(insulte|humilie|rabaisse)\b.{0,40}\b(ma[îi]tresse|prof|enseignant)\b'],
+
         // Harcèlement / moqueries répétées
         ['type' => 'harcelement', 'rx' => '\b(harc[eè]l|harceler)\b'],
         ['type' => 'harcelement', 'rx' => '\bse\s+moquent?\s+de\s+moi\b'],

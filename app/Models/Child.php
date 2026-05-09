@@ -16,7 +16,7 @@ class Child extends Authenticatable
 
     protected $fillable = [
         'school_id', 'name', 'email', 'password',
-        'age', 'age_group', 'classe',
+        'age', 'age_group', 'classe', 'gender',
         'score_enfant', 'status', 'last_session_at',
     ];
 

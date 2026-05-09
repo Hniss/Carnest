@@ -14,6 +14,7 @@ class ChildFactory extends Factory
             'age'      => $this->faker->numberBetween(5, 14),
             // age_group calculé automatiquement par ChildObserver::creating()
             'classe'   => $this->faker->randomElement(['CE1','CE2','CM1','CM2','5ème','6ème']),
+            'gender'   => $this->faker->randomElement(['m', 'f']),
         ];
     }
 }

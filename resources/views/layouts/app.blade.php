@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'CareNest') }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,11 +22,8 @@
     <aside class="hidden lg:flex w-[248px] shrink-0 flex-col bg-white border-r border-stone-200">
         {{-- Brand --}}
         <div class="px-5 pt-6 pb-5">
-            <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-2.5">
-                <span class="w-8 h-8 rounded-lg bg-brand-700 text-white flex items-center justify-center shadow-sm">
-                    <x-icon name="leaf" size="18" />
-                </span>
-                <span class="font-display font-extrabold text-lg tracking-tight text-stone-900">CareNest</span>
+            <a href="{{ route('dashboard') }}" class="inline-flex items-center">
+                <x-carenest-logo variant="full" class="h-9 w-auto" />
             </a>
         </div>
 
@@ -47,7 +45,9 @@
             </a>
 
             <div class="eyebrow px-3 pt-6 pb-2">Paramètres</div>
-            <a href="#" class="nav-item">
+            <a href="{{ route('admin.settings') }}"
+               class="nav-item {{ request()->routeIs('admin.settings') ? 'nav-item-active' : '' }}"
+               wire:navigate>
                 <x-icon name="settings" class="nav-icon" />
                 Établissement
             </a>
@@ -77,11 +77,8 @@
 
     {{-- Mobile top bar --}}
     <div class="lg:hidden fixed top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200 px-4 py-3 flex items-center justify-between">
-        <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-2">
-            <span class="w-7 h-7 rounded-md bg-brand-700 text-white flex items-center justify-center">
-                <x-icon name="leaf" size="16" />
-            </span>
-            <span class="font-display font-extrabold text-base">CareNest</span>
+        <a href="{{ route('dashboard') }}" class="inline-flex items-center">
+            <x-carenest-logo variant="full" class="h-7 w-auto" />
         </a>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

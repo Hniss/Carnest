@@ -26,11 +26,11 @@ class DatabaseSeeder extends Seeder
         $school->users()->attach($director->id, ['role' => 'director']);
 
         $children = [
-            ['name' => 'Yassine', 'email' => 'yassine@carenest.ma', 'age' => 10, 'classe' => 'CM2'],
-            ['name' => 'Amina',   'email' => 'amina@carenest.ma',   'age' => 8,  'classe' => 'CE2'],
-            ['name' => 'Omar',    'email' => 'omar@carenest.ma',    'age' => 11, 'classe' => '5ème'],
-            ['name' => 'Sara',    'email' => 'sara@carenest.ma',    'age' => 9,  'classe' => 'CM1'],
-            ['name' => 'Karim',   'email' => 'karim@carenest.ma',   'age' => 12, 'classe' => '6ème'],
+            ['name' => 'Yassine', 'email' => 'yassine@carenest.ma', 'age' => 10, 'classe' => 'CM2',  'gender' => 'm'],
+            ['name' => 'Amina',   'email' => 'amina@carenest.ma',   'age' => 8,  'classe' => 'CE2',  'gender' => 'f'],
+            ['name' => 'Omar',    'email' => 'omar@carenest.ma',    'age' => 11, 'classe' => '5ème', 'gender' => 'm'],
+            ['name' => 'Sara',    'email' => 'sara@carenest.ma',    'age' => 9,  'classe' => 'CM1',  'gender' => 'f'],
+            ['name' => 'Karim',   'email' => 'karim@carenest.ma',   'age' => 12, 'classe' => '6ème', 'gender' => 'm'],
         ];
 
         foreach ($children as $data) {

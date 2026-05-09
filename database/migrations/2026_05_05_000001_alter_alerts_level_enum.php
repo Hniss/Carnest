@@ -29,12 +29,28 @@ return new class extends Migration
         }
 
         if ($driver === 'sqlite') {
-            // SQLite : pas de vrai enum, contrainte CHECK existe peut-être ; on recrée la colonne proprement.
-            // Stratégie : comme l'enum SQLite est représenté en TEXT + CHECK, on désactive la contrainte
-            // en recréant une colonne text simple (acceptée par les tests qui utilisent SQLite en mémoire).
-            Schema::table('alerts', function ($table) {
-                // En SQLite "level" est déjà du TEXT — pas de modification nécessaire.
+            // SQLite stocke les enums avec une contrainte CHECK. Pour les MAJ, on recrée
+            // la table alerts avec la nouvelle contrainte étendue (low/moderate/high/critical).
+            // On copie les données existantes et on rétablit les FK.
+            Schema::create('alerts_tmp_v3', function ($table) {
+                $table->id();
+                $table->foreignId('session_id')->constrained('chat_sessions')->cascadeOnDelete();
+                $table->foreignId('child_id')->constrained('children')->cascadeOnDelete();
+                $table->foreignId('school_id')->constrained()->cascadeOnDelete();
+                $table->enum('type', ['harcelement','detresse','stress','tristesse','danger','isolement']);
+                $table->enum('level', ['low','moderate','high','critical']);
+                $table->enum('status', ['unread','read','resolved'])->default('unread');
+                $table->timestamp('notified_at')->nullable()->default(null);
+                $table->timestamps();
+                $table->index(['school_id', 'status']);
+                $table->index(['child_id', 'created_at']);
             });
+
+            DB::statement('INSERT INTO alerts_tmp_v3 (id, session_id, child_id, school_id, type, level, status, notified_at, created_at, updated_at)
+                           SELECT id, session_id, child_id, school_id, type, level, status, notified_at, created_at, updated_at FROM alerts');
+
+            Schema::drop('alerts');
+            Schema::rename('alerts_tmp_v3', 'alerts');
             return;
         }
 
