@@ -6,7 +6,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Rule;
 use Livewire\Component;
 
-#[Layout('layouts.guest')]
+#[Layout('layouts.child')]
 class Login extends Component
 {
     #[Rule('required|email')]
