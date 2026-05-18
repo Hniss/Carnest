@@ -1,4 +1,5 @@
 <?php
+use App\Livewire\Admin\ChildProfile;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\Settings as AdminSettings;
 use App\Livewire\Child\ChatInterface;
@@ -16,6 +17,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', Dashboard::class)->name('dashboard');
     Route::get('/settings', AdminSettings::class)->name('admin.settings');
+    Route::get('/children/{child}', ChildProfile::class)->name('admin.children.show');
     Route::permanentRedirect('/admin/dashboard', '/dashboard')->name('admin.dashboard');
 });
 

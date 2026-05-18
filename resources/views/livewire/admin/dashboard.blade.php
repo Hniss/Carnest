@@ -134,12 +134,14 @@
                     @forelse ($children as $child)
                         <tr>
                             <td>
-                                <div class="flex items-center gap-3">
+                                <a href="{{ route('admin.children.show', $child) }}"
+                                   wire:navigate
+                                   class="flex items-center gap-3 group">
                                     <div class="w-8 h-8 rounded-full bg-brand-50 text-brand-800 flex items-center justify-center text-xs font-semibold shrink-0">
                                         {{ strtoupper(substr($child->name, 0, 1)) }}
                                     </div>
-                                    <div class="font-medium text-stone-900">{{ $child->name }}</div>
-                                </div>
+                                    <div class="font-medium text-stone-900 group-hover:text-brand-700 group-hover:underline underline-offset-2 transition-colors">{{ $child->name }}</div>
+                                </a>
                             </td>
                             <td class="text-stone-500">{{ $child->classe }}</td>
                             <td class="text-stone-500">{{ $child->age }}</td>

@@ -137,7 +137,7 @@ backend/                         # Laravel app
   - `endSession` → `dispatchSync(ProcessSessionClosure)` pour que `last_session_at`, `score_enfant`, `status` du Child se mettent à jour **immédiatement** sans worker queue (P1, P6).
   - Niveaux d'alerte 4 paliers : low / moderate / high / critical (`AlertLevelResolver` — P9, P10).
   - Bouton "Paramètres" fonctionnel → page `/settings` (Livewire `Admin\Settings`) éditant seuil d'alerte, notifications email, langue (P2).
-- [x] Tests (98 passed, 267 assertions — +28 tests V4 : parseTurn renforcé, gender prompt, ChildStatusResolver, CloseIdleSessions, humiliation_adulte)
+- [x] Tests (119 passed, 326 assertions — +21 tests V5 : WellbeingTrendResolver ×10, ChildProfile ×6, ChatInterface fallback anti-boucle ×4 ; +28 V4)
 - [x] **Corrections V4** (Probleme CareNest V4 — 12 problèmes en 1 PR) :
   - **P1** Bouton « J'ai fini ma session » : `type="button"`, hit-area large (px-5 py-2.5 rounded-full), `wire:loading` + `wire:target="endSession"` avec spinner « Je clôture… », `z-10` au-dessus de la barre input, `active:scale-95`, focus ring accessible.
   - **P2** Sauvegarde session abandonnée : `last_activity_at` sur `chat_sessions` + job `CloseIdleSessions` exécuté toutes les 2 min par `Schedule::call` (synchrone, pas de queue). Ferme les sessions idle ≥ 5 min, crée alerte fallback si zone orange/red, dispatchSync `ProcessSessionClosure`.
@@ -152,11 +152,30 @@ backend/                         # Laravel app
   - **UI-1** Logo CareNest : composant `<x-carenest-logo>` (4 variantes PNG) + favicon, déployé dans tous les layouts (`app`, `guest`, `child`) + login enfant + chat header. Plus aucun usage de l'icône `leaf` comme logo (elle reste comme avatar IA dans les bulles de chat).
   - **UI-2** Welcome enfant : login `livewire/child/login.blade.php` refait en 2 colonnes — panneau gauche `bg-brand-700` avec logo blanc + message bienveillant « Tu n'as pas besoin d'avoir les bons mots. Dis juste ce que tu ressens, comme tu peux. Care est là pour t'écouter avec douceur. 🌿 ». Le panneau loi 09-08 reste sur le login admin (`guest.blade.php`).
 
+- [x] **Corrections V5** (mai 2026 — 2 chantiers en 1 PR) :
+  - **Fix boucle bot** (signalé : 2 fallbacks « Je t'écoute… » / « D'accord, je suis là… » après 2 messages enfant positifs). Cause : Gemini API en 503, `safeFallback('green')` ne servait que 2 phrases génériques en alternance. Correctif (`app/Livewire/Child/ChatInterface.php`) :
+    - Nouveaux props `consecutiveFailures` + `lastFallback` (sérialisation Livewire).
+    - `buildFallback()` remplace `safeFallback()` : 3 candidats par zone, détection positive (`isPositive()`) sur dernier message en mémoire (jamais persisté), anti-répétition via `pickDistinct()`.
+    - 2e échec consécutif zone green/yellow → bascule sur 1 des 3 messages dégradés honnêtes (« Pardon, j'ai un peu de mal à te répondre… »).
+    - Succès IA → reset `consecutiveFailures` à 0 + `lastFallback` à null.
+  - **Suivi psychique longitudinal sur profil enfant** (nouvelle page `/children/{child}` route `admin.children.show`) :
+    - Enum `App\Enums\ZoneScore` : source de vérité unique du mapping zone→score (100/70/35/0), réutilisé par `ProcessSessionClosure` et `WellbeingTrendResolver`.
+    - DTOs read-only `App\DataTransferObjects\{WellbeingTrendReport, WindowStats, TrendBadge}`.
+    - Service `App\Services\WellbeingTrendResolver` (calcul à la volée, **pas** de migration) : tendance court terme 7j + long terme 30j, seuils delta ±10, sous-représentation `< 2` sessions (7j) / `< 3` (30j) → forçage `stable`, `worseningStreak` (max 8 sem) → `worseningSignal` si streak ≥ 2, sparkline 8 semaines (ASC, ?float pour les trous).
+    - Page Livewire `App\Livewire\Admin\ChildProfile` : scope école vérifié en `mount()` ET dans `resolveAlert()` via `assertSameSchool()` (defense in depth). Actions `resolveAlert()` (recalcule `child->status` via `ChildStatusResolver`), `addNote()` (validation 5-500 chars).
+    - Channel logging `admin_audit` (`config/logging.php`, driver `daily`, rétention 90j) — log à `storage/logs/admin-audit.log`. Actions tracées : `view_profile`, `resolve_alert`, `add_note`. **Aucun contenu de message ou de note loggé** (uniquement IDs + IP).
+    - Vue `resources/views/livewire/admin/child-profile.blade.php` : bannière conditionnelle d'aggravation (variante douce streak < 3, forte ≥ 3), 3 KPI cards (score / sessions 7j / alertes 30j), 2 badges tendance (▲▬▼), sparkline SVG inline 8 semaines avec interruptions sur les `null`, dernière session, alertes récentes (resolvables), historique 20 dernières sessions, notes admin.
+    - Lien depuis dashboard : nom enfant cliquable → profil (`wire:navigate`).
+
 ### Réserves QA ouvertes (non bloquantes)
 - Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système) — sans cela les sessions abandonnées ne se ferment pas.
 - Ajouter au moins un test Livewire intégré couvrant `sendMessage → Alert créée → 2e message neutre → pas de 2e Alert` (idempotence run-to-run).
 - Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` + status — pas de canal push/email implémenté.
 - Tests E2E manuels : reprendre les 10 cas du document `Probleme CareNest V4` après déploiement pour valider la régression.
+- **V5** : `chat_sessions.ai_summary` n'est pas chiffré au repos (`encrypted` cast). Décision PO différée — à confirmer ; impact : rechiffrement one-shot des données existantes si activation tardive.
+- **V5** : pas de FormRequest dédié pour `ChildProfile::addNote` (validation inline). Acceptable pour 1 champ, à externaliser si la note gagne en complexité.
+- **V5** : pas de rate-limiting sur `resolveAlert` / `addNote` (route admin authentifiée, mais à ajouter pour audit anti-abus).
+- **V5** : Tester en prod réelle le passage à un provider de fallback (Anthropic) si Gemini reste indisponible plus de N minutes — décision PO : différer (filet anti-boucle suffit pour MVP).
 
 ---
 

@@ -28,6 +28,20 @@ class ChatInterface extends Component
     /** Indique si une alerte temps réel a déjà été créée pour la session (idempotence). */
     public bool $alertCreated = false;
 
+    /**
+     * Compteur d'échecs IA consécutifs (Gemini 503, timeout, parse vide).
+     * Sert à basculer sur un message dégradé honnête après 2 échecs d'affilée
+     * plutôt que d'enchaîner les fallbacks génériques qui donnent l'impression
+     * d'une boucle (bug remonté UI : 2 fallbacks « Je t'écoute… » / « D'accord, je suis là… »).
+     */
+    public int $consecutiveFailures = 0;
+
+    /**
+     * Dernier fallback servi (texte). Permet de NE JAMAIS renvoyer deux fois de
+     * suite la même phrase de secours quand l'IA enchaîne les échecs.
+     */
+    public ?string $lastFallback = null;
+
     public function mount(): void
     {
         $child = Auth::guard('child')->user();
@@ -113,8 +127,18 @@ class ChatInterface extends Component
         $alertType    = $deterministic['alert_type'] ?? $aiAlertType ?? $this->currentAlertType;
 
         $reply = $aiResult['message'] ?? null;
-        if ($reply === null || trim($reply) === '') {
-            $reply = $this->safeFallback($mergedZone);
+        $aiFailed = $reply === null || trim($reply) === '';
+        if ($aiFailed) {
+            $this->consecutiveFailures++;
+            $reply = $this->buildFallback(
+                $mergedZone,
+                $lastUser['content'] ?? '',
+                $this->consecutiveFailures,
+            );
+            $this->lastFallback = $reply;
+        } else {
+            $this->consecutiveFailures = 0;
+            $this->lastFallback = null;
         }
 
         // 4) Si le filet déterministe détecte ROUGE alors que l'IA n'a pas viré rouge,
@@ -258,32 +282,110 @@ class ChatInterface extends Component
     }
 
     /**
-     * Fallback DOUX et CONTEXTUEL si l'IA échoue ou renvoie un texte vide.
-     * Ne réutilise PAS la phrase générique « Je suis là pour toi… » signalée par la QA (P2).
+     * Construit un fallback contextuel quand l'IA échoue (Gemini 503, parse vide).
+     *
+     * Anti-boucle (bug remonté V5) — règles :
+     *  1. Détecte si le dernier message enfant a une tonalité POSITIVE (« content »,
+     *     « j'ai rencontré… ») pour ne PAS lui répondre par « Je t'écoute, raconte-moi
+     *     ce qui se passe » qui sonne froid et générique.
+     *  2. Au DEUXIÈME échec consécutif, sert un message honnête de dégradation
+     *     plutôt qu'une 2e phrase générique qui donne l'impression de boucler.
+     *  3. Anti-répétition : si la phrase candidate est identique au dernier fallback,
+     *     on prend la suivante de la liste.
+     *
+     * RGPD : on lit le dernier message enfant uniquement en mémoire (jamais persisté).
      */
-    private function safeFallback(string $zone): string
+    private function buildFallback(string $zone, string $lastUserContent, int $failures): string
     {
-        // P3 : aucun fallback ne change brusquement de sujet quand l'enfant a
-        // exprimé une émotion. On reste sur la validation + question ouverte.
+        // P3 : un fallback ne change PAS brusquement de sujet si l'enfant a déjà
+        // exprimé une émotion (zone yellow/orange/red).
+        if ($failures >= 2 && in_array($zone, ['green', 'yellow'], true)) {
+            // 2e échec d'affilée sur tonalité neutre/légère : on assume
+            // honnêtement que le service rame et on invite à reformuler.
+            $degraded = [
+                "Pardon, j'ai un peu de mal à te répondre là tout de suite. Tu veux bien me redire ?",
+                "Désolée, ma réponse n'arrive pas comme il faut. Tu peux reformuler en une phrase courte ?",
+                "Excuse-moi, j'ai un petit souci de connexion. Redis-moi en quelques mots ?",
+            ];
+            return $this->pickDistinct($degraded);
+        }
+
         $candidates = match ($zone) {
             'red'    => [
                 "Je t'entends. Ce que tu vis est lourd, et tu n'as pas à rester seul avec ça. Est-ce qu'il y a un adulte près de toi à qui tu fais confiance ?",
+                "Merci de me l'avoir dit. C'est trop pour toi tout seul — il faut qu'un adulte de confiance soit au courant. Qui est près de toi en ce moment ?",
             ],
             'orange' => [
                 "C'est important ce que tu me dis. Est-ce que ça arrive souvent ?",
                 "Merci de m'avoir confié ça. Tu peux me raconter un peu plus ce qui s'est passé ?",
+                "Je vois que c'est dur. Depuis quand ça se passe comme ça ?",
             ],
             'yellow' => [
                 "Je comprends que ça t'ait pesé. Qu'est-ce qui t'a le plus dérangé aujourd'hui ?",
                 "On peut respirer ensemble si tu veux : on inspire 4 secondes, on garde 4 secondes, on souffle 4 secondes. Tu veux essayer ?",
+                "Ça a l'air d'être un moment compliqué. Tu veux m'en dire un peu plus ?",
             ],
-            default  => [
-                "Je t'écoute. Tu peux me raconter ce qui se passe pour toi en ce moment ?",
-                "D'accord, je suis là. Qu'est-ce que tu aimerais me dire ?",
-            ],
+            default  => $this->isPositive($lastUserContent)
+                ? [
+                    "Ah, c'est chouette à entendre ! 🌿 Qu'est-ce qui t'a fait du bien aujourd'hui ?",
+                    "Super, je suis contente pour toi. Tu veux me raconter ce qui s'est passé ?",
+                    "C'est une belle nouvelle. Qu'est-ce qui t'a le plus plu ?",
+                ]
+                : [
+                    "Je t'écoute. Tu peux me raconter ce qui se passe pour toi en ce moment ?",
+                    "D'accord, je suis là. Qu'est-ce que tu aimerais me dire ?",
+                    "Continue, je te suis. Comment tu te sens là, juste maintenant ?",
+                ],
         };
 
-        return $candidates[array_rand($candidates)];
+        return $this->pickDistinct($candidates);
+    }
+
+    /**
+     * Détection lexicale très simple d'une tonalité POSITIVE sur le dernier
+     * message enfant. Sert UNIQUEMENT à orienter le choix d'un fallback —
+     * ne stocke rien, ne classifie pas en BDD (la zone reste green).
+     */
+    private function isPositive(string $text): bool
+    {
+        $t = mb_strtolower(trim($text));
+        if ($t === '') return false;
+
+        // Marqueurs « mot entier » uniquement (regex \b) — sinon « ri » matcherait
+        // « triste », « pris », « écrit ». Note QA V5.
+        $wordMarkers = [
+            'content', 'contente', 'heureux', 'heureuse', 'super', 'génial', 'genial',
+            'cool', 'top', 'bien', 'rigole', 'rigolé', 'amusé', 'amusée', 'amuse',
+            'fier', 'fière', 'fiere', 'préférée', 'préféré', 'preferee', 'prefere',
+        ];
+        foreach ($wordMarkers as $w) {
+            if (preg_match('/\b' . preg_quote($w, '/') . '\b/u', $t)) return true;
+        }
+
+        // Expressions multi-mots (déjà non-ambiguës).
+        $phrases = [
+            'trop bien', "j'aime", 'jaime', 'rencontré ma prof', 'rencontre ma prof',
+        ];
+        foreach ($phrases as $p) {
+            if (str_contains($t, $p)) return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Pioche un candidat distinct du dernier fallback servi (anti-répétition).
+     */
+    private function pickDistinct(array $candidates): string
+    {
+        $pool = array_values(array_filter(
+            $candidates,
+            fn ($c) => $c !== $this->lastFallback
+        ));
+        if (empty($pool)) {
+            $pool = $candidates;
+        }
+        return $pool[array_rand($pool)];
     }
 
     /**

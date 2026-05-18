@@ -73,6 +73,16 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Audit trail des actions admin sur les profils enfants (loi 09-08 / RGPD).
+        // Aucun contenu de message enfant n'est loggé ici : uniquement des IDs et
+        // l'action effectuée. Rétention 90 jours pour répondre aux demandes CNDP.
+        'admin_audit' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/admin-audit.log'),
+            'level'  => 'info',
+            'days'   => 90,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

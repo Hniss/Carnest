@@ -49,4 +49,9 @@ class Child extends Authenticatable
     {
         return $this->hasMany(Alert::class);
     }
+
+    public function adminNotes(): HasMany
+    {
+        return $this->hasMany(AdminNote::class);
+    }
 }

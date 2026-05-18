@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AdminNote extends Model
 {
-    protected $fillable = ['alert_id', 'user_id', 'content'];
+    protected $fillable = ['child_id', 'alert_id', 'user_id', 'content'];
+
+    public function child(): BelongsTo
+    {
+        return $this->belongsTo(Child::class);
+    }
 
     public function alert(): BelongsTo
     {

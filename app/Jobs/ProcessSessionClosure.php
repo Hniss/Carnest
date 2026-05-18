@@ -1,6 +1,7 @@
 <?php
 namespace App\Jobs;
 
+use App\Enums\ZoneScore;
 use App\Models\ChatSession;
 use App\Models\Child;
 use App\Services\ChildStatusResolver;
@@ -13,13 +14,6 @@ use Illuminate\Queue\SerializesModels;
 class ProcessSessionClosure implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    private const ZONE_SCORES = [
-        'green'  => 100,
-        'yellow' => 70,
-        'orange' => 35,
-        'red'    => 0,
-    ];
 
     public function __construct(private readonly ChatSession $session) {}
 
@@ -50,7 +44,7 @@ class ProcessSessionClosure implements ShouldQueue
             return null;
         }
 
-        $total = $sessions->sum(fn ($s) => self::ZONE_SCORES[$s->zone] ?? 0);
+        $total = $sessions->sum(fn ($s) => ZoneScore::fromZone((string) $s->zone));
 
         return $total / $sessions->count();
     }
