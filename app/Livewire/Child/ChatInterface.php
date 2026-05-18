@@ -130,11 +130,7 @@ class ChatInterface extends Component
         $aiFailed = $reply === null || trim($reply) === '';
         if ($aiFailed) {
             $this->consecutiveFailures++;
-            $reply = $this->buildFallback(
-                $mergedZone,
-                $lastUser['content'] ?? '',
-                $this->consecutiveFailures,
-            );
+            $reply = $this->buildFallback($mergedZone, $this->consecutiveFailures);
             $this->lastFallback = $reply;
         } else {
             $this->consecutiveFailures = 0;
@@ -285,17 +281,13 @@ class ChatInterface extends Component
      * Construit un fallback contextuel quand l'IA échoue (Gemini 503, parse vide).
      *
      * Anti-boucle (bug remonté V5) — règles :
-     *  1. Détecte si le dernier message enfant a une tonalité POSITIVE (« content »,
-     *     « j'ai rencontré… ») pour ne PAS lui répondre par « Je t'écoute, raconte-moi
-     *     ce qui se passe » qui sonne froid et générique.
-     *  2. Au DEUXIÈME échec consécutif, sert un message honnête de dégradation
-     *     plutôt qu'une 2e phrase générique qui donne l'impression de boucler.
-     *  3. Anti-répétition : si la phrase candidate est identique au dernier fallback,
+     *  1. Au DEUXIÈME échec consécutif zone neutre/légère, sert un message honnête
+     *     de dégradation plutôt qu'une 2e phrase générique qui donne l'impression
+     *     de boucler.
+     *  2. Anti-répétition : si la phrase candidate est identique au dernier fallback,
      *     on prend la suivante de la liste.
-     *
-     * RGPD : on lit le dernier message enfant uniquement en mémoire (jamais persisté).
      */
-    private function buildFallback(string $zone, string $lastUserContent, int $failures): string
+    private function buildFallback(string $zone, int $failures): string
     {
         // P3 : un fallback ne change PAS brusquement de sujet si l'enfant a déjà
         // exprimé une émotion (zone yellow/orange/red).
@@ -325,52 +317,15 @@ class ChatInterface extends Component
                 "On peut respirer ensemble si tu veux : on inspire 4 secondes, on garde 4 secondes, on souffle 4 secondes. Tu veux essayer ?",
                 "Ça a l'air d'être un moment compliqué. Tu veux m'en dire un peu plus ?",
             ],
-            default  => $this->isPositive($lastUserContent)
-                ? [
-                    "Ah, c'est chouette à entendre ! 🌿 Qu'est-ce qui t'a fait du bien aujourd'hui ?",
-                    "Super, je suis contente pour toi. Tu veux me raconter ce qui s'est passé ?",
-                    "C'est une belle nouvelle. Qu'est-ce qui t'a le plus plu ?",
-                ]
-                : [
-                    "Je t'écoute. Tu peux me raconter ce qui se passe pour toi en ce moment ?",
-                    "D'accord, je suis là. Qu'est-ce que tu aimerais me dire ?",
-                    "Continue, je te suis. Comment tu te sens là, juste maintenant ?",
-                ],
+            default  => [
+                "Je t'écoute. Tu veux m'en dire un peu plus ?",
+                "D'accord, je te suis. Qu'est-ce qui s'est passé pour toi aujourd'hui ?",
+                "Je comprends. Tu veux qu'on continue à en parler ?",
+                "Merci de partager ça avec moi. Qu'est-ce que tu aimerais me raconter ?",
+            ],
         };
 
         return $this->pickDistinct($candidates);
-    }
-
-    /**
-     * Détection lexicale très simple d'une tonalité POSITIVE sur le dernier
-     * message enfant. Sert UNIQUEMENT à orienter le choix d'un fallback —
-     * ne stocke rien, ne classifie pas en BDD (la zone reste green).
-     */
-    private function isPositive(string $text): bool
-    {
-        $t = mb_strtolower(trim($text));
-        if ($t === '') return false;
-
-        // Marqueurs « mot entier » uniquement (regex \b) — sinon « ri » matcherait
-        // « triste », « pris », « écrit ». Note QA V5.
-        $wordMarkers = [
-            'content', 'contente', 'heureux', 'heureuse', 'super', 'génial', 'genial',
-            'cool', 'top', 'bien', 'rigole', 'rigolé', 'amusé', 'amusée', 'amuse',
-            'fier', 'fière', 'fiere', 'préférée', 'préféré', 'preferee', 'prefere',
-        ];
-        foreach ($wordMarkers as $w) {
-            if (preg_match('/\b' . preg_quote($w, '/') . '\b/u', $t)) return true;
-        }
-
-        // Expressions multi-mots (déjà non-ambiguës).
-        $phrases = [
-            'trop bien', "j'aime", 'jaime', 'rencontré ma prof', 'rencontre ma prof',
-        ];
-        foreach ($phrases as $p) {
-            if (str_contains($t, $p)) return true;
-        }
-
-        return false;
     }
 
     /**
