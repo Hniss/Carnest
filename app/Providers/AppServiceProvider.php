@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\AIService;
 use App\Services\ClaudeAIService;
 use App\Services\GeminiService;
+use App\Services\OpenAIService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -18,6 +19,13 @@ class AppServiceProvider extends ServiceProvider
                 return new ClaudeAIService(
                     apiKey: config('services.ai.anthropic_key'),
                     model: config('services.ai.anthropic_model', 'claude-sonnet-4-20250514'),
+                );
+            }
+
+            if ($provider === 'openai') {
+                return new OpenAIService(
+                    apiKey: config('services.ai.openai_key'),
+                    model: config('services.ai.openai_model', 'gpt-4o-mini'),
                 );
             }
 

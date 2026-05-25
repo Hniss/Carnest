@@ -8,7 +8,15 @@ use Illuminate\Support\Facades\Log;
 
 class GeminiService implements AIService
 {
-    private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+    protected function baseUrl(): string
+    {
+        return 'https://generativelanguage.googleapis.com/v1beta/openai';
+    }
+
+    protected function providerLabel(): string
+    {
+        return 'Gemini';
+    }
 
     private const ALERT_TYPES = ['harcelement', 'detresse', 'stress', 'tristesse', 'danger', 'isolement', 'humiliation_adulte'];
 
@@ -156,8 +164,8 @@ ZONE: <green|yellow|orange|red>
 PROMPT;
 
     public function __construct(
-        private readonly string $apiKey,
-        private readonly string $model,
+        protected readonly string $apiKey,
+        protected readonly string $model,
     ) {}
 
     /**
@@ -180,7 +188,7 @@ PROMPT;
                 $text = $response['choices'][0]['message']['content'] ?? $text;
                 $finishReason = $response['choices'][0]['finish_reason'] ?? null;
             } catch (\Throwable $e) {
-                Log::warning('GeminiService length retry failed', ['error' => $e->getMessage()]);
+                Log::warning($this->providerLabel() . 'Service length retry failed', ['error' => $e->getMessage()]);
             }
         }
 
@@ -280,22 +288,22 @@ PROMPT;
             $shouldRetry = in_array($status, self::RETRY_STATUSES, true) && $attempt < self::MAX_ATTEMPTS;
 
             if (! $shouldRetry) {
-                Log::error('GeminiService HTTP error', [
+                Log::error($this->providerLabel() . 'Service HTTP error', [
                     'status'   => $status,
                     'attempts' => $attempt,
                 ]);
-                throw new \RuntimeException('Gemini API error: ' . $status);
+                throw new \RuntimeException($this->providerLabel() . ' API error: ' . $status);
             }
 
             usleep($attempt * 800 * 1000);
         }
 
-        throw new \RuntimeException('Gemini API error: retries exhausted');
+        throw new \RuntimeException($this->providerLabel() . ' API error: retries exhausted');
     }
 
     private function client(): PendingRequest
     {
-        return Http::baseUrl(self::BASE_URL)
+        return Http::baseUrl($this->baseUrl())
             ->withToken($this->apiKey)
             ->timeout(30)
             ->acceptJson();
