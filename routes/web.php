@@ -2,6 +2,7 @@
 use App\Livewire\Admin\ChildProfile;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\Settings as AdminSettings;
+use App\Http\Controllers\Child\SessionCloseController;
 use App\Livewire\Child\ChatInterface;
 use App\Livewire\Child\Login as ChildLogin;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,11 @@ Route::post('/child/logout', function () {
 // ── Child chat (guard child) ────────────────────────────
 Route::middleware('auth:child')->group(function () {
     Route::get('/chat', ChatInterface::class)->name('child.chat');
+
+    // #1 (V5) — Clôture beacon (fermeture/actualisation de fenêtre).
+    // Exclue du CSRF (cf. bootstrap/app.php) : sendBeacon ne peut pas envoyer
+    // d'en-tête token. Protégée par le guard child + contrôle d'appartenance.
+    Route::post('/chat/close', SessionCloseController::class)->name('child.chat.close');
 });
 
 Route::view('profile', 'profile')

@@ -1,6 +1,4 @@
-<div class="flex flex-col min-h-screen bg-gradient-to-b from-brand-50/40 via-stone-50 to-stone-50"
-     x-data
-     x-on:scroll-bottom.window="$nextTick(() => { const el = document.getElementById('messages'); if(el) el.scrollTop = el.scrollHeight })">
+<div class="flex flex-col min-h-screen bg-gradient-to-b from-brand-50/40 via-stone-50 to-stone-50">
 
     {{-- Header --}}
     <header class="bg-white/80 backdrop-blur border-b border-stone-200 px-5 py-3.5 flex items-center justify-between sticky top-0 z-10">
@@ -68,6 +66,7 @@
             <div class="bg-white rounded-2xl shadow-elevated border border-stone-200 p-2 flex gap-2 items-center">
                 <form wire:submit="sendMessage" class="flex-1 flex gap-2 items-center">
                     <input wire:model="input" type="text"
+                           data-chat-input
                            placeholder="Écris ce que tu ressens…"
                            class="flex-1 px-4 py-2.5 bg-transparent border-0 focus:ring-0 focus:outline-none text-[15px] placeholder:text-stone-400"
                            {{ $isTyping ? 'disabled' : '' }}>
@@ -109,3 +108,50 @@
     </div>
     @endif
 </div>
+
+@script
+<script>
+    // JS scopé au composant Livewire ($wire dispo). On gère ici trois retours
+    // de tests V5 : auto-scroll (#4), focus input (#5), beacon de clôture (#1).
+    const messagesEl = document.getElementById('messages');
+    const scrollDown = () => requestAnimationFrame(() => {
+        if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+
+    // #4 — Auto-scroll fiable : tout ajout de nœud (réponse IA, indicateur de
+    // saisie) déclenche un scroll en bas. Couvre le timing de morph Livewire.
+    if (messagesEl) {
+        new MutationObserver(scrollDown).observe(messagesEl, { childList: true, subtree: true });
+        scrollDown();
+    }
+    $wire.on('scroll-bottom', scrollDown);
+
+    // #5 — Focus rendu à l'enfant une fois la réponse arrivée (champ ré-activé).
+    $wire.on('focus-input', () => {
+        requestAnimationFrame(() => {
+            const input = document.querySelector('[data-chat-input]');
+            if (input && !input.disabled) input.focus();
+        });
+    });
+
+    // #1 — Fermeture/actualisation de fenêtre sans « Fin de session » : on
+    // clôture la session via beacon (résumé + alerte préservés). Anti-double-envoi.
+    let beaconSent = false;
+    const sendClose = () => {
+        if (beaconSent) return;
+        const sessionId = $wire.get('sessionId');
+        if (!sessionId || $wire.get('sessionClosed')) return;
+        beaconSent = true;
+        const payload = JSON.stringify({
+            session_id: sessionId,
+            messages: $wire.get('messages') || [],
+        });
+        navigator.sendBeacon(
+            @js(route('child.chat.close')),
+            new Blob([payload], { type: 'application/json' })
+        );
+    };
+    window.addEventListener('pagehide', sendClose);
+    window.addEventListener('beforeunload', sendClose);
+</script>
+@endscript

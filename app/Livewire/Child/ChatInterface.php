@@ -4,7 +4,9 @@ namespace App\Livewire\Child;
 use App\Models\Alert;
 use App\Models\ChatSession;
 use App\Services\AIService;
+use App\Services\ChildContextBuilder;
 use App\Services\CrisisDetector;
+use App\Services\SessionCloser;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
@@ -42,10 +44,22 @@ class ChatInterface extends Component
      */
     public ?string $lastFallback = null;
 
+    /**
+     * #7 (V5) — Bloc mémoire inter-sessions injecté dans le prompt système IA.
+     * Construit une seule fois au mount à partir des données déjà persistées
+     * (résumés, zones, alertes — jamais de message brut). null = 1er passage.
+     */
+    public ?string $childContext = null;
+
     public function mount(): void
     {
         $child = Auth::guard('child')->user();
-        $welcome = $this->getWelcome($child->age_group);
+
+        // #7 — On charge la mémoire de l'enfant AVANT d'ouvrir la session courante,
+        // pour ne compter que les sessions réellement antérieures.
+        $this->childContext = app(ChildContextBuilder::class)->build($child);
+
+        $welcome = $this->getWelcome($child->age_group, $child->name, $this->childContext !== null);
         $this->messages[] = ['role' => 'assistant', 'content' => $welcome];
 
         // P2 (V4) : on initialise last_activity_at dès la création — c'est ce
@@ -107,7 +121,7 @@ class ChatInterface extends Component
 
         $aiResult = null;
         try {
-            $aiResult = app(AIService::class)->chat($aiMessages, $child->age, $child->gender ?? null);
+            $aiResult = app(AIService::class)->chat($aiMessages, $child->age, $child->gender ?? null, $this->childContext);
         } catch (\Throwable $e) {
             Log::error('Chat AI failure', [
                 'child_id' => $child->id,
@@ -130,7 +144,14 @@ class ChatInterface extends Component
         $aiFailed = $reply === null || trim($reply) === '';
         if ($aiFailed) {
             $this->consecutiveFailures++;
-            $reply = $this->buildFallback($mergedZone, $this->consecutiveFailures);
+            // #3 (V5) : si l'enfant a juste répondu un mot court/ambigu et qu'aucun
+            // signal n'a fait monter la zone, on relance avec des choix simples
+            // plutôt qu'un fallback générique — jamais d'escalade émotionnelle.
+            if ($mergedZone === 'green' && $lastUser && $this->isShortAmbiguous($lastUser['content'])) {
+                $reply = $this->shortAmbiguousRelaunch($child->age_group);
+            } else {
+                $reply = $this->buildFallback($mergedZone, $this->consecutiveFailures);
+            }
             $this->lastFallback = $reply;
         } else {
             $this->consecutiveFailures = 0;
@@ -149,6 +170,9 @@ class ChatInterface extends Component
         $this->messages[] = ['role' => 'assistant', 'content' => $reply];
         $this->isTyping = false;
         $this->dispatch('scroll-bottom');
+        // #5 (V5) : le champ est ré-activé une fois la réponse arrivée → on rend
+        // le focus à l'enfant pour qu'il puisse écrire sans recliquer.
+        $this->dispatch('focus-input');
 
         // P2 (V4) : on persiste l'état courant de la session — last_activity_at,
         // pire zone observée, low_confidence selon résultat IA. Permet au job
@@ -173,61 +197,20 @@ class ChatInterface extends Component
         $session = ChatSession::find($this->sessionId);
         if (! $session) return;
 
-        $detector = app(CrisisDetector::class);
+        // V5 : logique de clôture mutualisée avec le beacon de fermeture de fenêtre
+        // (SessionCloser) — analyse IA, pire zone conservée, alerte idempotente,
+        // recalcul score/statut synchrone. Welcome retiré (slice(1)) du contexte.
         $aiMessages = collect($this->messages)->slice(1)->values()->toArray();
 
-        try {
-            $analysis = app(AIService::class)->analyzeSession($aiMessages, $child->age, $child->gender ?? null);
-
-            // On garde la PIRE zone observée pendant la session (P11) :
-            // l'IA peut redescendre artificiellement à la fin, on protège ça.
-            $finalZone = $detector->maxZone($this->currentZone, $analysis['zone']);
-            $finalAlertType = $analysis['alert_type'] ?? $this->currentAlertType;
-
-            $session->update([
-                'ended_at'       => now(),
-                'zone'           => $finalZone,
-                'ai_summary'     => $analysis['summary'],
-                'low_confidence' => $analysis['lowConfidence'],
-            ]);
-
-            // Création d'alerte de fin uniquement si aucune n'a déjà été créée
-            // en temps réel pendant la conversation (idempotence).
-            if (! $this->alertCreated && in_array($finalZone, ['orange', 'red'], true)) {
-                Alert::create([
-                    'session_id' => $session->id,
-                    'child_id'   => $child->id,
-                    'school_id'  => $child->school_id,
-                    'type'       => $finalAlertType ?? 'detresse',
-                    'level'      => $finalZone === 'red'
-                        ? 'critical'
-                        : app(\App\Services\AlertLevelResolver::class)->resolve(
-                            $finalAlertType,
-                            $finalZone,
-                            collect($this->messages)->where('role', 'user')->pluck('content')->all()
-                        ),
-                ]);
-                $this->alertCreated = true;
-            }
-
-            // P1/P6 : update synchrone du child (last_session_at, score, status)
-            // pour que le dashboard reflète l'état immédiatement, sans worker queue.
-            \App\Jobs\ProcessSessionClosure::dispatchSync($session);
-        } catch (\Throwable $e) {
-            Log::error('Session analysis failure', [
-                'session' => $session->id,
-                'error'   => $e->getMessage(),
-            ]);
-            // Même en échec d'analyse, on persiste la pire zone observée côté backend.
-            $session->update([
-                'ended_at'       => now(),
-                'zone'           => $this->currentZone,
-                'low_confidence' => true,
-            ]);
-            // On lance quand même le calcul de score pour que la dernière session
-            // remonte au dashboard (P1).
-            \App\Jobs\ProcessSessionClosure::dispatchSync($session);
-        }
+        $result = app(SessionCloser::class)->close(
+            $session,
+            $aiMessages,
+            $child,
+            $this->currentZone,
+            $this->currentAlertType,
+            $this->alertCreated,
+        );
+        $this->alertCreated = $result['alert_created'];
 
         $this->sessionClosed = true;
         $this->messages[] = [
@@ -363,12 +346,61 @@ class ChatInterface extends Component
         };
     }
 
-    private function getWelcome(string $ageGroup): string
+    /**
+     * #7 (V5) — Welcome personnalisé par prénom, et chaleureux si l'enfant est
+     * déjà venu ($returning). On reste SIMPLE et bienveillant — c'est l'IA, via
+     * le bloc mémoire du prompt, qui assure la continuité fine de l'échange.
+     */
+    private function getWelcome(string $ageGroup, ?string $name = null, bool $returning = false): string
     {
-        return match($ageGroup) {
-            '5-7'   => "Salut ! 😊 Moi c'est Care ! Comment tu vas aujourd'hui ?",
-            '8-11'  => "Hey ! Contente de te voir 😊 Tu peux me dire comment s'est passée ta journée ?",
-            default => "Bonjour ! Je suis là pour toi. Comment tu te sens en ce moment ?",
+        $first = $name ? trim(explode(' ', trim($name))[0]) : null;
+
+        if ($returning) {
+            return match ($ageGroup) {
+                '5-7'   => $first ? "Coucou {$first} ! 😊 Je suis contente de te revoir ! Comment tu vas aujourd'hui ?" : "Coucou ! 😊 Contente de te revoir ! Comment tu vas aujourd'hui ?",
+                '8-11'  => $first ? "Hey {$first} ! Contente de te revoir 😊 Comment s'est passée ta journée ?" : "Hey ! Contente de te revoir 😊 Comment s'est passée ta journée ?",
+                default => $first ? "Re-bonjour {$first}. Je suis là pour toi. Comment tu te sens aujourd'hui ?" : "Re-bonjour. Je suis là pour toi. Comment tu te sens aujourd'hui ?",
+            };
+        }
+
+        return match ($ageGroup) {
+            '5-7'   => $first ? "Salut {$first} ! 😊 Moi c'est Care ! Comment tu vas aujourd'hui ?" : "Salut ! 😊 Moi c'est Care ! Comment tu vas aujourd'hui ?",
+            '8-11'  => $first ? "Hey {$first} ! Contente de te voir 😊 Tu peux me dire comment s'est passée ta journée ?" : "Hey ! Contente de te voir 😊 Tu peux me dire comment s'est passée ta journée ?",
+            default => $first ? "Bonjour {$first} ! Je suis là pour toi. Comment tu te sens en ce moment ?" : "Bonjour ! Je suis là pour toi. Comment tu te sens en ce moment ?",
+        };
+    }
+
+    /**
+     * #3 (V5) — Détecte une réponse très courte / ambiguë (« oui », « non »,
+     * « bof », « rien », « ok », « je sais pas ») qui ne doit JAMAIS être
+     * interprétée comme un signal de détresse ni faire monter la zone.
+     */
+    private function isShortAmbiguous(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+        // Retire ponctuation de fin et espaces multiples.
+        $normalized = preg_replace('/[\s\.\!\?,;]+/u', ' ', $normalized);
+        $normalized = trim($normalized);
+
+        $tokens = [
+            'oui', 'non', 'bof', 'rien', 'ok', 'okay', 'nan', 'ouais',
+            'je sais pas', 'jsp', 'jsais pas', 'sais pas', 'aucune idee',
+            'aucune idée', 'peut etre', 'peut-être', 'mouais', 'ca va', 'ça va',
+        ];
+
+        return in_array($normalized, $tokens, true);
+    }
+
+    /**
+     * #3 (V5) — Relance neutre à choix simples, adaptée à l'âge, quand l'IA
+     * échoue sur une réponse courte/ambiguë. Reste LÉGER, pas de dramatisation.
+     */
+    private function shortAmbiguousRelaunch(string $ageGroup): string
+    {
+        return match ($ageGroup) {
+            '5-7'   => "Pas de souci 🙂 Tu veux qu'on parle de l'école, de tes copains, ou d'un dessin animé que tu aimes ?",
+            '8-11'  => "D'accord 🙂 Tu préfères me parler de l'école, de tes copains, ou de ce que tu as fait aujourd'hui ?",
+            default => "Pas de problème. Tu préfères qu'on parle de l'école, de tes amis, ou d'autre chose qui t'occupe en ce moment ?",
         };
     }
 

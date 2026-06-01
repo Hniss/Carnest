@@ -20,7 +20,9 @@ interface AIService
      * Le message est nettoyé (markers internes retirés) avant d'être affiché à l'enfant.
      *
      * @param ?string $childGender 'm' | 'f' | 'x' | null — pour accord de genre dans le prompt (P8 V4)
+     * @param ?string $childContext Bloc mémoire inter-sessions injecté dans le prompt système
+     *                              (#7 V5 — prénom, signaux récurrents, tendance). null = pas de mémoire.
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool}
      */
-    public function chat(array $messages, int $childAge, ?string $childGender = null): array;
+    public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null): array;
 }

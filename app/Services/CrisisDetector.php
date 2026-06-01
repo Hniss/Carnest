@@ -28,6 +28,17 @@ class CrisisDetector
 
     /** Phrases « orange » : signaux importants mais pas critiques en eux-mêmes. */
     private const ORANGE_PATTERNS = [
+        // #6 (V5) — Violence physique COMMISE par l'enfant (l'enfant est l'auteur,
+        // ex. « j'ai giflé une meuf »). « gifler » vise toujours une personne → sûr.
+        // Pour frapper/taper/cogner, on EXIGE un objet « personne » (pronom l'/lui
+        // ou article/nom) afin d'éviter les faux positifs (« j'ai tapé dans le ballon »,
+        // « j'ai poussé la porte »). Le prompt prend ensuite le relais (ne pas lâcher
+        // le sujet, orienter vers un adulte).
+        ['type' => 'danger', 'rx' => '\bj\'?ai\s+gifl\w*'],
+        ['type' => 'danger', 'rx' => '\bje\s+(l\'|lui\s+)ai\s+(gifl\w*|frapp\w*|tap\w*|cogn\w*|mis\s+un\s+coup|mis\s+une\s+(gifle|claque))'],
+        ['type' => 'danger', 'rx' => '\bj\'?ai\s+(frapp\w*|tap\w*|cogn\w*|battu)\s+(un|une|mon|ma|le|la|quelqu|.{0,6}\b(fille|gar[çc]on|copain|copine|camarade|[eé]l[èe]ve))'],
+
+
         // P10 (V4) — Humiliation par un adulte de l'école.
         // Important : ces patterns sont placés AVANT les patterns harcèlement génériques
         // pour ne pas être absorbés par "ils m'insultent".

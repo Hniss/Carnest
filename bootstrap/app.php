@@ -11,7 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // #1 (V5) — Le beacon de clôture de session est envoyé par
+        // navigator.sendBeacon() qui ne peut pas joindre d'en-tête CSRF.
+        // La route reste protégée par le guard 'child' + contrôle d'appartenance.
+        $middleware->validateCsrfTokens(except: [
+            'chat/close',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

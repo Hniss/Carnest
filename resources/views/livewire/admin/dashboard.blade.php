@@ -1,4 +1,7 @@
-<div class="space-y-8">
+{{-- #2 (V5) — Dashboard live : les alertes créées en temps réel pendant une
+     session enfant (zone orange/rouge) remontent ici sans rafraîchissement
+     manuel. Polling léger toutes les 15s, en pause quand l'onglet est masqué. --}}
+<div class="space-y-8" wire:poll.15s.visible>
 
     {{-- Page header --}}
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

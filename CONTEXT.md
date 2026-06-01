@@ -167,11 +167,24 @@ backend/                         # Laravel app
     - Vue `resources/views/livewire/admin/child-profile.blade.php` : bannière conditionnelle d'aggravation (variante douce streak < 3, forte ≥ 3), 3 KPI cards (score / sessions 7j / alertes 30j), 2 badges tendance (▲▬▼), sparkline SVG inline 8 semaines avec interruptions sur les `null`, dernière session, alertes récentes (resolvables), historique 20 dernières sessions, notes admin.
     - Lien depuis dashboard : nom enfant cliquable → profil (`wire:navigate`).
 
+- [x] **Corrections V6** (Probleme CareNest V5 — 9 retours testeur, 1 PR) :
+  - **#7 Mémoire inter-sessions** (majeur) : nouveau service pur `App\Services\ChildContextBuilder` qui construit un bloc mémoire injectable dans le prompt système, à partir des données DÉJÀ persistées (prénom/classe/âge, signaux récurrents agrégés depuis `alerts` sur 30j, résumés des 2-3 dernières sessions, tendance via `WellbeingTrendResolver`). `null` au 1er passage. Flag `RAPPEL_EXPLICITE_AUTORISE` (oui si signal grave récurrent / `worseningSignal`). Threadé via `AIService::chat(..., ?string $childContext)` → `GeminiService::buildSystemPrompt()` (nouveau placeholder + const `MEMORY_USAGE_RULES`). `ChatInterface::mount()` charge le contexte et personnalise le welcome par prénom (variante « de te revoir » si récurrent). **Comportement « selon la zone »** (validé PO) : personnalisation discrète par défaut, rappel explicite doux uniquement si signal grave récurrent. Aucun message brut stocké (règle d'or §4 respectée).
+  - **#1 Alertes/résumé perdus à la fermeture** : nouveau service `App\Services\SessionCloser` (logique de clôture mutualisée, extraite de `endSession`) + endpoint `Child\SessionCloseController` (`POST /chat/close`, guard child, contrôle d'appartenance, exclu CSRF dans `bootstrap/app.php`). Beacon `navigator.sendBeacon` sur `pagehide`/`beforeunload` (vue chat). Repli zone-only si analyse IA échoue ; clôture sans appel IA si aucun message enfant. `CloseIdleSessions` reste le filet ultime.
+  - **#2 Alertes critiques temps réel** : `wire:poll.15s.visible` sur le dashboard admin (l'alerte rouge/orange était déjà créée en temps réel par `maybeCreateAlert`). Email différé (décision PO).
+  - **#3 Messages courts ambigus** : règle prompt renforcée + section dédiée (« rien » reste neutre, jamais d'escalade) ; garde déterministe `ChatInterface::isShortAmbiguous()` + relance à choix simples sur échec IA.
+  - **#4 Auto-scroll** : `MutationObserver` sur `#messages` (dans `@script`) — fiable face au timing de morph Livewire.
+  - **#5 Focus input** : événement `focus-input` dispatché en fin de `fetchReply` → refocus du champ (`@script`).
+  - **#6 Violence physique commise** : section prompt « ne lâche jamais un sujet de sécurité sur un simple non » + gestion de l'aveu de violence ; `CrisisDetector` : patterns orange conservateurs pour violence admise (gifler / l'ai frappé / frappé une personne), type `danger`, anti-faux-positif sur objets.
+  - **#8 Hors sujet** : section prompt `PÉRIMÈTRE` — redirection douce, pas de réponse factuelle (géo, culture générale, maths).
+  - **#9 Priorisation multi-signaux** : règle prompt — accrocher sur le signal le plus critique (danger > violence/harcèlement > isolement > tristesse > stress).
+  - Tests : +21 (`ChildContextBuilderTest` ×5, `SessionCloserTest` ×6, `SessionCloseBeaconTest` ×3, `ChatInterfaceMemoryTest` ×4, `CrisisDetectorTest` +3). **140 passed**.
+
 ### Réserves QA ouvertes (non bloquantes)
-- Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système) — sans cela les sessions abandonnées ne se ferment pas.
-- Ajouter au moins un test Livewire intégré couvrant `sendMessage → Alert créée → 2e message neutre → pas de 2e Alert` (idempotence run-to-run).
-- Vérifier que `ProcessSessionClosure` (ou un futur Notifier) respecte la règle d'or §7 : push/email **uniquement** sur `level=critical`. Aujourd'hui le job ne fait que recalculer le `score_enfant` + status — pas de canal push/email implémenté.
-- Tests E2E manuels : reprendre les 10 cas du document `Probleme CareNest V4` après déploiement pour valider la régression.
+- Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système). **Atténué V6** : le beacon de clôture (#1) ferme désormais la session dès la fermeture/actualisation de fenêtre ; `CloseIdleSessions` n'est plus que le filet ultime.
+- **V6** : le canal email d'alerte critique reste différé (décision PO #2). Aujourd'hui l'alerte rouge est créée en temps réel + remonte au dashboard via polling, mais **aucun push/email** n'est envoyé. À implémenter (Notification Laravel sur `level=critical`) quand le SMTP sera configuré.
+- **V6** : le beacon dépend de `navigator.sendBeacon` (best-effort). En cas d'échec réseau au unload, `CloseIdleSessions` reprend le relais après ≤ 5 min. À valider en prod réelle (mobile notamment).
+- **V6** : le pattern `CrisisDetector` de violence commise (#6) est volontairement étroit — à élargir prudemment selon les faux négatifs observés en prod.
+- Tests E2E manuels : reprendre les 9 cas du document `Probleme CareNest V5` après déploiement pour valider la régression.
 - **V5** : `chat_sessions.ai_summary` n'est pas chiffré au repos (`encrypted` cast). Décision PO différée — à confirmer ; impact : rechiffrement one-shot des données existantes si activation tardive.
 - **V5** : pas de FormRequest dédié pour `ChildProfile::addNote` (validation inline). Acceptable pour 1 champ, à externaliser si la note gagne en complexité.
 - **V5** : pas de rate-limiting sur `resolveAlert` / `addNote` (route admin authentifiée, mais à ajouter pour audit anti-abus).

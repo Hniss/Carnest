@@ -129,6 +129,48 @@ class CrisisDetectorTest extends TestCase
         $this->assertFalse($result['matched']);
     }
 
+    /**
+     * #6 (V5) — Violence physique COMMISE par l'enfant.
+     * « j'ai giflé une meuf » → orange + type danger (le prompt prend ensuite
+     * le relais pour ne pas lâcher le sujet et orienter vers un adulte).
+     */
+    public function test_orange_zone_on_admitted_slap(): void
+    {
+        $result = $this->detector->evaluate("j'ai giflé une meuf à la récré", 'green');
+        $this->assertSame('orange', $result['zone']);
+        $this->assertSame('danger', $result['alert_type']);
+        $this->assertTrue($result['matched']);
+    }
+
+    public function test_orange_zone_on_admitted_hit_with_pronoun(): void
+    {
+        $result = $this->detector->evaluate("je l'ai frappé parce qu'il m'a énervé", 'green');
+        $this->assertSame('orange', $result['zone']);
+        $this->assertSame('danger', $result['alert_type']);
+    }
+
+    /**
+     * #6 — Anti-faux-positif : « taper/pousser » un OBJET ne doit pas déclencher.
+     */
+    public function test_does_not_match_hitting_an_object(): void
+    {
+        $this->assertFalse($this->detector->evaluate("j'ai tapé dans le ballon", 'green')['matched']);
+        $this->assertFalse($this->detector->evaluate("j'ai poussé la porte trop fort", 'green')['matched']);
+    }
+
+    /**
+     * #3 (V5) — Un mot court/neutre ne doit JAMAIS faire monter la zone côté
+     * filet déterministe. « rien », « non », « bof » restent green.
+     */
+    public function test_short_neutral_tokens_stay_green(): void
+    {
+        foreach (['rien', 'non', 'bof', 'oui', 'je sais pas'] as $token) {
+            $result = $this->detector->evaluate($token, 'green');
+            $this->assertSame('green', $result['zone'], "Le token « {$token} » ne doit pas escalader.");
+            $this->assertFalse($result['matched']);
+        }
+    }
+
     public function test_normalisation_handles_letter_repetition(): void
     {
         // "Trooooop seul" doit matcher "tout seul"-ish via normalisation.
