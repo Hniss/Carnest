@@ -10,12 +10,18 @@ class Alert extends Model
     protected $fillable = [
         'session_id', 'child_id', 'school_id',
         'type', 'level', 'status', 'notified_at',
+        'summary', 'signals', 'prompt_version', 'model', 'adjudication',
     ];
 
+    /**
+     * D10 (v3) — summary chiffré au repos (cast `encrypted`) ; jamais filtré en SQL.
+     */
     protected function casts(): array
     {
         return [
             'notified_at' => 'datetime',
+            'summary'     => 'encrypted',
+            'signals'     => 'array',
         ];
     }
 

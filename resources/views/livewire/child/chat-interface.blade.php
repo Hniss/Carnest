@@ -1,12 +1,26 @@
+@php
+    // D4 (v3) — avatar fixe de Care : en-tête pour tous, vignette dans les bulles
+    // pour 5-7 et 8-11 uniquement (discret pour 12-18).
+    $ageGroup = auth('child')->user()->age_group;
+    $isTeen = $ageGroup === '12-18';
+    $avatarUrl = asset('img/care/care-avatar.png');
+@endphp
 <div class="flex flex-col min-h-screen bg-gradient-to-b from-brand-50/40 via-stone-50 to-stone-50">
 
     {{-- Header --}}
-    <header class="bg-white/80 backdrop-blur border-b border-stone-200 px-5 py-3.5 flex items-center justify-between sticky top-0 z-10">
-        <a href="{{ route('child.chat') }}" class="flex items-center gap-2.5">
-            <x-carenest-logo variant="full" class="h-8 w-auto" />
+    <header class="bg-white/80 backdrop-blur border-b border-stone-200 px-4 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-3 sticky top-0 z-10">
+        <a href="{{ route('child.chat') }}" class="flex items-center gap-2.5 min-w-0">
+            <x-carenest-logo variant="full" class="h-8 w-auto shrink-0" />
             <span class="hidden sm:inline-block text-[11px] text-stone-500 border-l border-stone-200 pl-2.5">Avec Care</span>
         </a>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+            <img src="{{ $avatarUrl }}"
+                 alt="Care"
+                 data-care-avatar="header"
+                 class="shrink-0 select-none"
+                 style="height: {{ $isTeen ? 40 : 64 }}px; width: auto; object-fit: contain;"
+                 height="{{ $isTeen ? 40 : 64 }}"
+                 draggable="false">
             <span class="text-sm text-stone-500 hidden sm:inline">
                 Bonjour, <span class="text-stone-900 font-medium">{{ auth('child')->user()->name }}</span>
             </span>
@@ -24,10 +38,13 @@
     <div id="messages" class="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full pb-40 space-y-4">
         @foreach ($messages as $msg)
             <div class="flex {{ $msg['role'] === 'user' ? 'flex-row-reverse' : '' }} items-end gap-2 animate-fade-up">
-                @if ($msg['role'] === 'assistant')
-                    <div class="w-9 h-9 rounded-full bg-brand-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <x-icon name="leaf" size="16" />
-                    </div>
+                @if ($msg['role'] === 'assistant' && ! $isTeen)
+                    <img src="{{ $avatarUrl }}"
+                         alt="Care"
+                         data-care-avatar="bubble"
+                         class="flex-shrink-0 select-none"
+                         style="height: 28px; width: auto; object-fit: contain;"
+                         height="28" draggable="false">
                 @endif
                 <div class="max-w-xs md:max-w-md px-4 py-3 text-[15px] leading-relaxed
                     {{ $msg['role'] === 'user'
@@ -45,9 +62,14 @@
 
         @if ($isTyping)
             <div class="flex items-end gap-2 animate-fade-up" wire:poll.600ms="fetchReply">
-                <div class="w-9 h-9 rounded-full bg-brand-700 text-white flex items-center justify-center shadow-sm">
-                    <x-icon name="leaf" size="16" />
-                </div>
+                @if (! $isTeen)
+                    <img src="{{ $avatarUrl }}"
+                         alt="Care"
+                         data-care-avatar="bubble"
+                         class="flex-shrink-0 select-none"
+                         style="height: 28px; width: auto; object-fit: contain;"
+                         height="28" draggable="false">
+                @endif
                 <div class="bg-white border border-stone-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-card">
                     <div class="flex gap-1.5">
                         <span class="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style="animation-delay:0s"></span>

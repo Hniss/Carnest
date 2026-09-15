@@ -11,8 +11,13 @@ class ChatSession extends Model
         'child_id', 'school_id', 'zone',
         'ai_summary', 'low_confidence',
         'started_at', 'ended_at', 'last_activity_at',
+        'tokens_used', 'prompt_version', 'model', 'care_memory',
     ];
 
+    /**
+     * D10 (v3) — ai_summary et care_memory sont chiffrés au repos (cast `encrypted`).
+     * Aucune requête ne doit filtrer (where / like) sur ces colonnes.
+     */
     protected function casts(): array
     {
         return [
@@ -20,6 +25,9 @@ class ChatSession extends Model
             'started_at'       => 'datetime',
             'ended_at'         => 'datetime',
             'last_activity_at' => 'datetime',
+            'ai_summary'       => 'encrypted',
+            'care_memory'      => 'encrypted',
+            'tokens_used'      => 'integer',
         ];
     }
 

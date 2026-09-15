@@ -5,7 +5,7 @@ namespace App\Services;
 /**
  * Résout le niveau d'alerte (low|moderate|high|critical) à partir de :
  *  - la zone finale (yellow|orange|red)
- *  - le type d'alerte (harcelement|detresse|isolement|tristesse|stress|danger)
+ *  - le type d'alerte (App\Enums\AlertType : harcelement|detresse|pensees_negatives|danger|isolement|stress|humiliation_adulte)
  *  - les messages bruts de l'enfant (analyse lexicale en mémoire, jamais stockée)
  *
  * Règles (Probleme CareNest V3 §9, §10) :
@@ -96,8 +96,8 @@ class AlertLevelResolver
             $factors += 1;
         }
 
-        // Cas spéciaux : détresse et danger en orange basculent vite en high
-        if (in_array($alertType, ['detresse', 'danger'], true)) {
+        // Cas spéciaux : détresse, danger et pensées négatives en orange basculent vite en high
+        if (in_array($alertType, ['detresse', 'danger', 'pensees_negatives'], true)) {
             $factors += 1;
         }
 

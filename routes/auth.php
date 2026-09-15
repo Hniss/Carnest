@@ -8,7 +8,9 @@ Route::middleware('guest')->group(function () {
     Volt::route('register', 'pages.auth.register')
         ->name('register');
 
+    // D10 (v3) — limitation de débit sur la page de connexion admin (10 req / min / IP).
     Volt::route('login', 'pages.auth.login')
+        ->middleware('throttle:10,1,login-admin')
         ->name('login');
 
     Volt::route('forgot-password', 'pages.auth.forgot-password')

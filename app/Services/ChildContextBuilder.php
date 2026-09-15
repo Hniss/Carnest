@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AlertType;
 use App\Models\Alert;
 use App\Models\ChatSession;
 use App\Models\Child;
@@ -17,8 +18,10 @@ use Carbon\CarbonImmutable;
  *
  * Conformité 09-08 / RGPD (CONTEXT.md §4 — règle d'or #1) :
  *  - On n'utilise QUE des données déjà persistées et autorisées :
- *    children.{name,age,classe}, chat_sessions.ai_summary (résumé IA, jamais
- *    le message brut), alerts.{type,level}, et la tendance calculée à la volée.
+ *    chat_sessions.ai_summary (résumé IA, jamais le message brut),
+ *    alerts.{type,level}, et la tendance calculée à la volée.
+ *  - D10 (v3) : AUCUNE donnée d'identité (prénom, nom, école, classe) n'est
+ *    injectée — le bloc part vers le fournisseur d'IA.
  *  - AUCUN message brut d'enfant n'est lu, et le bloc instruit explicitement
  *    Care de ne JAMAIS répéter un résumé mot pour mot à l'enfant.
  *
@@ -36,8 +39,7 @@ class ChildContextBuilder
     /** Un type d'alerte vu ≥ ce seuil sur la fenêtre = signal récurrent. */
     public const RECURRING_THRESHOLD = 2;
 
-    /** Types d'alerte considérés « graves » → autorisent le rappel explicite doux. */
-    private const SERIOUS_TYPES = ['harcelement', 'detresse', 'danger', 'isolement', 'humiliation_adulte'];
+    /** Types d'alerte considérés « graves » → autorisent le rappel explicite doux (source : AlertType::seriousValues()). */
 
     public function __construct(
         private readonly WellbeingTrendResolver $trendResolver,
@@ -75,7 +77,7 @@ class ChildContextBuilder
         foreach ($alertCounts as $type => $count) {
             if ($count >= self::RECURRING_THRESHOLD) {
                 $recurringLines[] = "{$type} ({$count}×)";
-                if (in_array($type, self::SERIOUS_TYPES, true)) {
+                if (in_array($type, AlertType::seriousValues(), true)) {
                     $hasRecurringSeriousSignal = true;
                 }
             }
@@ -135,10 +137,9 @@ class ChildContextBuilder
             ? 'aucun signal récurrent marquant'
             : implode(', ', $recurringLines);
 
+        // D10 (v3) — pas de prénom ni de classe : le bloc est envoyé au fournisseur d'IA.
         $lines = [
             'MÉMOIRE — CE QUE TU SAIS DÉJÀ DE CET ENFANT',
-            "Prénom : {$child->name}",
-            "Classe : {$child->classe}",
             "Sessions précédentes : {$closedCount}",
             "Signaux récurrents (30 derniers jours) : {$recurring}",
             "Tendance récente : {$trendLabel}",

@@ -27,8 +27,9 @@ class ChildObserverTest extends TestCase
             'age 7'  => [7,  '5-7'],
             'age 8'  => [8,  '8-11'],
             'age 11' => [11, '8-11'],
-            'age 12' => [12, '12-14'],
-            'age 14' => [14, '12-14'],
+            'age 12' => [12, '12-18'],
+            'age 14' => [14, '12-18'],
+            'age 18' => [18, '12-18'],
         ];
     }
 
@@ -39,6 +40,6 @@ class ChildObserverTest extends TestCase
         $this->assertEquals('5-7', $child->age_group);
 
         $child->update(['age' => 12]);
-        $this->assertEquals('12-14', $child->fresh()->age_group);
+        $this->assertEquals('12-18', $child->fresh()->age_group);
     }
 }

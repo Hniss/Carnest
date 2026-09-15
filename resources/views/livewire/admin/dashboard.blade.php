@@ -235,7 +235,7 @@
                     <div class="flex-1 min-w-0">
                         <div class="font-medium text-stone-900 truncate">{{ $alert->child->name }}</div>
                         <div class="text-xs text-stone-500 mt-0.5">
-                            {{ $alert->child->classe }} · {{ ucfirst($alert->type) }} · {{ $alert->created_at->diffForHumans() }}
+                            {{ $alert->child->classe }} · {{ \App\Enums\AlertType::labelFor($alert->type) }} · {{ $alert->created_at->diffForHumans() }}
                         </div>
                     </div>
 

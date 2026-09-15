@@ -13,9 +13,19 @@ class Dashboard extends Component
 {
     public string $alertFilter = 'all';
 
+    /**
+     * D10 (v3) — cloisonnement multi-école : l'alerte doit appartenir à une
+     * école de l'utilisateur connecté (même patron que ChildProfile), sinon 403.
+     */
     public function resolveAlert(int $alertId): void
     {
-        Alert::findOrFail($alertId)->update(['status' => 'resolved']);
+        $alert = Alert::find($alertId);
+        abort_unless($alert, 404);
+
+        $userSchoolIds = Auth::user()->schools()->pluck('schools.id');
+        abort_unless($userSchoolIds->contains($alert->school_id), 403);
+
+        $alert->update(['status' => 'resolved']);
     }
 
     public function render()

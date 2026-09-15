@@ -138,13 +138,13 @@ class GeminiServiceParseTest extends TestCase
             '*' => Http::sequence()
                 ->push([
                     'choices' => [[
-                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: tristesse\nZONE: orange"],
+                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: detresse\nZONE: orange"],
                         'finish_reason' => 'length',
                     ]],
                 ], 200)
                 ->push([
                     'choices' => [[
-                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: tristesse\nZONE: orange"],
+                        'message' => ['content' => "Je comprends que tu sois triste. C'est important. Est-ce qu'il y\nALERT_TYPE: detresse\nZONE: orange"],
                         'finish_reason' => 'length',
                     ]],
                 ], 200),
@@ -169,7 +169,7 @@ class GeminiServiceParseTest extends TestCase
         Http::fake([
             '*' => Http::response($this->makeResponseBody(
                 "Je comprends que tu te sentes triste et seul.\n"
-                . "ALERT_TYPE: tristesse|isolement\n"
+                . "ALERT_TYPE: detresse|isolement\n"
                 . "ZONE: orange"
             )),
         ]);
@@ -179,9 +179,9 @@ class GeminiServiceParseTest extends TestCase
         ], 10);
 
         $this->assertStringNotContainsString('ALERT_TYPE', $result['message']);
-        $this->assertStringNotContainsString('tristesse|isolement', $result['message']);
+        $this->assertStringNotContainsString('detresse|isolement', $result['message']);
         $this->assertStringNotContainsString('|', $result['message']);
-        $this->assertSame('tristesse', $result['alert_type']);
+        $this->assertSame('detresse', $result['alert_type']);
         $this->assertSame('orange', $result['zone']);
     }
 

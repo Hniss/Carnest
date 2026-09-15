@@ -43,6 +43,11 @@ return [
         'openai_model'    => env('OPENAI_MODEL', 'gpt-4o-mini'),
         'anthropic_key'   => env('ANTHROPIC_API_KEY'),
         'anthropic_model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+
+        // D6 (v3) — endpoints configurables. OpenAI : résidence des données UE par défaut.
+        'openai_base_url'    => env('OPENAI_BASE_URL', 'https://eu.api.openai.com/v1'),
+        'anthropic_base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
+        'gemini_base_url'    => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
     ],
 
 ];

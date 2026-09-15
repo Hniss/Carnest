@@ -6,15 +6,23 @@ use App\Models\ChatSession;
 use App\Services\AIService;
 use App\Services\ChildContextBuilder;
 use App\Services\CrisisDetector;
+use App\Services\GeminiService;
 use App\Services\SessionCloser;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('layouts.child')]
 class ChatInterface extends Component
 {
+    /** D10 (v3) — limitation de débit : messages par minute et par enfant. */
+    public const RATE_LIMIT_PER_MINUTE = 20;
+
+    /** Message doux servi au-delà du débit autorisé (aucun appel à l'IA). */
+    public const RATE_LIMIT_MESSAGE = "Je suis là, prends une petite pause et on continue dans un instant.";
+
     public array $messages = [];
     public string $input = '';
     public bool $isTyping = false;
@@ -81,6 +89,19 @@ class ChatInterface extends Component
         $text = trim($this->input);
         $this->input = '';
         $this->messages[] = ['role' => 'user', 'content' => $text];
+
+        // D10 (v3) — 20 messages / minute / enfant. Au-delà : réponse douce
+        // immédiate, aucun appel IA (isTyping reste false, fetchReply ne fait rien).
+        $child = Auth::guard('child')->user();
+        $rateKey = self::rateLimitKey((int) $child->id);
+        if (RateLimiter::tooManyAttempts($rateKey, self::RATE_LIMIT_PER_MINUTE)) {
+            $this->messages[] = ['role' => 'assistant', 'content' => self::RATE_LIMIT_MESSAGE];
+            $this->isTyping = false;
+            $this->dispatch('scroll-bottom');
+            return;
+        }
+        RateLimiter::hit($rateKey, 60);
+
         $this->isTyping = true;
 
         // P2 (V4) : on touche last_activity_at + zone à chaque message enfant.
@@ -183,6 +204,19 @@ class ChatInterface extends Component
                 'zone'             => $this->currentZone,
                 'low_confidence'   => $aiResult['low_confidence'] ?? false,
             ]);
+
+            // D8 (v3) — comptage des tokens + traçabilité prompt/modèle (le plafond
+            // journalier lui-même est traité au lot 2).
+            if ($aiResult !== null) {
+                ChatSession::whereKey($this->sessionId)->increment(
+                    'tokens_used',
+                    max(0, (int) ($aiResult['tokens'] ?? 0)),
+                    [
+                        'prompt_version' => GeminiService::PROMPT_VERSION,
+                        'model'          => $aiResult['model'] ?? null,
+                    ]
+                );
+            }
         }
 
         // 5) Création d'alerte temps réel (P9, P11, P13).
@@ -243,12 +277,18 @@ class ChatInterface extends Component
                     collect($this->messages)->where('role', 'user')->pluck('content')->all()
                 );
 
+            // D10 (v3) — summary = résumé IA de la session s'il existe déjà (chiffré au
+            // repos), version de prompt et modèle pour la traçabilité de l'alerte.
+            $session = ChatSession::find($this->sessionId);
             Alert::create([
-                'session_id' => $this->sessionId,
-                'child_id'   => $child->id,
-                'school_id'  => $child->school_id,
-                'type'       => $this->currentAlertType ?? 'detresse',
-                'level'      => $level,
+                'session_id'     => $this->sessionId,
+                'child_id'       => $child->id,
+                'school_id'      => $child->school_id,
+                'type'           => $this->currentAlertType ?? 'detresse',
+                'level'          => $level,
+                'summary'        => $session?->ai_summary,
+                'prompt_version' => $session?->prompt_version ?? GeminiService::PROMPT_VERSION,
+                'model'          => $session?->model,
             ]);
             $this->alertCreated = true;
         } catch (\Throwable $e) {
@@ -333,7 +373,7 @@ class ChatInterface extends Component
      * P7 + P9 (V4) :
      *  - vocabulaire 100% Maroc (parent, enseignant, surveillant, responsable de l'école, directeur).
      *  - PAS de mention « infirmière » (vocabulaire non aligné avec le système marocain).
-     *  - 141 mentionné UNIQUEMENT pour 8-11 et 12-14, et avec formulation conditionnelle
+     *  - 141 mentionné UNIQUEMENT pour 8-11 et 12-18, et avec formulation conditionnelle
      *    « si tu ne peux parler à personne tout de suite ». Pour 5-7 on évite le numéro
      *    (l'enfant ne sait pas appeler) et on oriente vers un adulte présent.
      */
@@ -402,6 +442,12 @@ class ChatInterface extends Component
             '8-11'  => "D'accord 🙂 Tu préfères me parler de l'école, de tes copains, ou de ce que tu as fait aujourd'hui ?",
             default => "Pas de problème. Tu préfères qu'on parle de l'école, de tes amis, ou d'autre chose qui t'occupe en ce moment ?",
         };
+    }
+
+    /** Clé RateLimiter par enfant (cache applicatif). */
+    public static function rateLimitKey(int $childId): string
+    {
+        return 'chat-child:' . $childId;
     }
 
     public function render()

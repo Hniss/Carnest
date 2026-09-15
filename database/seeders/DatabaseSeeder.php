@@ -7,11 +7,17 @@ use App\Models\SchoolSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // D10 (v3) — aucun mot de passe de démonstration dans le dépôt : lus depuis
+        // l'environnement, sinon générés et affichés une seule fois en console.
+        $adminPassword = $this->demoPassword('DEMO_ADMIN_PASSWORD', 'administrateur');
+        $childPassword = $this->demoPassword('DEMO_CHILD_PASSWORD', 'élèves');
+
         $school = School::create([
             'name'  => 'École Agdal',
             'city'  => 'Rabat',
@@ -21,7 +27,7 @@ class DatabaseSeeder extends Seeder
         $director = User::create([
             'name'     => 'Mme Benali',
             'email'    => 'admin@carenest.ma',
-            'password' => Hash::make('admin123'),
+            'password' => Hash::make($adminPassword),
         ]);
         $school->users()->attach($director->id, ['role' => 'director']);
 
@@ -37,8 +43,21 @@ class DatabaseSeeder extends Seeder
             Child::create([
                 ...$data,
                 'school_id' => $school->id,
-                'password'  => Hash::make('demo123'),
+                'password'  => Hash::make($childPassword),
             ]);
         }
+    }
+
+    private function demoPassword(string $envKey, string $label): string
+    {
+        $value = env($envKey);
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+
+        $generated = Str::password(16);
+        $this->command?->warn("{$envKey} absent : mot de passe {$label} de démonstration généré (non enregistré) : {$generated}");
+
+        return $generated;
     }
 }

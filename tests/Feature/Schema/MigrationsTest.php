@@ -40,6 +40,7 @@ class MigrationsTest extends TestCase
             'id','school_id','name','email','password',
             'age','age_group','classe','gender','score_enfant',
             'status','last_session_at','remember_token',
+            'birth_date','deactivated_at',
             'created_at','updated_at',
         ] as $col) {
             $this->assertTrue(Schema::hasColumn('children', $col), "Missing column: $col");
@@ -53,6 +54,7 @@ class MigrationsTest extends TestCase
             'id','child_id','school_id','zone',
             'ai_summary','low_confidence',
             'started_at','ended_at','last_activity_at','created_at','updated_at',
+            'tokens_used','prompt_version','model','care_memory',
         ] as $col) {
             $this->assertTrue(Schema::hasColumn('chat_sessions', $col), "Missing column: $col");
         }
@@ -65,6 +67,7 @@ class MigrationsTest extends TestCase
             'id','session_id','child_id','school_id',
             'type','level','status','notified_at',
             'created_at','updated_at',
+            'summary','signals','prompt_version','model','adjudication',
         ] as $col) {
             $this->assertTrue(Schema::hasColumn('alerts', $col), "Missing column: $col");
         }

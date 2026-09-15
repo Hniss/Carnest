@@ -8,6 +8,14 @@ class AdminNote extends Model
 {
     protected $fillable = ['child_id', 'alert_id', 'user_id', 'content'];
 
+    /** D10 (v3) — contenu de note chiffré au repos ; jamais filtré en SQL. */
+    protected function casts(): array
+    {
+        return [
+            'content' => 'encrypted',
+        ];
+    }
+
     public function child(): BelongsTo
     {
         return $this->belongsTo(Child::class);

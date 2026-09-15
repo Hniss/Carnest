@@ -18,7 +18,7 @@ class CrisisDetectorTest extends TestCase
     {
         $result = $this->detector->evaluate("j'ai envie de mourir", 'green');
         $this->assertSame('red', $result['zone']);
-        $this->assertSame('detresse', $result['alert_type']);
+        $this->assertSame('pensees_negatives', $result['alert_type']);
         $this->assertTrue($result['matched']);
     }
 
@@ -33,6 +33,35 @@ class CrisisDetectorTest extends TestCase
     {
         $result = $this->detector->evaluate("papa me frappe tous les soirs", 'green');
         $this->assertSame('red', $result['zone']);
+        $this->assertSame('danger', $result['alert_type']);
+    }
+
+    /**
+     * D7 (v3) — nouveaux motifs rouges : pensées négatives / envie de disparaître.
+     */
+    public function test_red_zone_on_v3_negative_thought_patterns(): void
+    {
+        foreach ([
+            'je veux mourir',
+            'je veux disparaître',
+            "j'ai plus envie de vivre",
+            "j'en peux plus de vivre",
+            'je vais me faire du mal',
+            'je veux en finir',
+        ] as $phrase) {
+            $result = $this->detector->evaluate($phrase, 'green');
+            $this->assertSame('red', $result['zone'], "Le message doit etre rouge : {$phrase}");
+            $this->assertSame('pensees_negatives', $result['alert_type'], "Le type doit etre pensees_negatives : {$phrase}");
+        }
+    }
+
+    /**
+     * D7 (v3) — `tristesse` n'existe plus : la dévalorisation passe en detresse.
+     */
+    public function test_orange_self_devaluation_is_detresse(): void
+    {
+        $result = $this->detector->evaluate("je suis nul", 'green');
+        $this->assertSame('orange', $result['zone']);
         $this->assertSame('detresse', $result['alert_type']);
     }
 

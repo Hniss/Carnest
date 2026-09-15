@@ -403,7 +403,7 @@
                     </span>
                     <div class="flex-1 min-w-0">
                         <div class="font-medium text-stone-900 text-sm truncate">
-                            {{ ucfirst(str_replace('_', ' ', (string) $alert->type)) }}
+                            {{ \App\Enums\AlertType::labelFor($alert->type) }}
                         </div>
                         <div class="text-xs text-stone-500 mt-0.5">
                             {{ $alert->created_at->diffForHumans() }}

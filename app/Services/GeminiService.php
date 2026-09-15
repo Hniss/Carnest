@@ -2,23 +2,30 @@
 
 namespace App\Services;
 
+use App\Enums\AlertType;
+use App\Models\Child;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class GeminiService implements AIService
 {
+    /**
+     * Version du prompt système (D8 / D10) — tracée sur chaque session et chaque alerte.
+     * À incrémenter à chaque modification de SYSTEM_TEMPLATE / ANALYSIS_PROMPT.
+     */
+    public const PROMPT_VERSION = 'v3.0';
+
+    /** D6 — endpoint configurable (GEMINI_BASE_URL) ; défaut = endpoint OpenAI-compatible de Google. */
     protected function baseUrl(): string
     {
-        return 'https://generativelanguage.googleapis.com/v1beta/openai';
+        return rtrim((string) config('services.ai.gemini_base_url', 'https://generativelanguage.googleapis.com/v1beta/openai'), '/');
     }
 
     protected function providerLabel(): string
     {
         return 'Gemini';
     }
-
-    private const ALERT_TYPES = ['harcelement', 'detresse', 'stress', 'tristesse', 'danger', 'isolement', 'humiliation_adulte'];
 
     private const SYSTEM_TEMPLATE = <<<'PROMPT'
 Tu es Care, l'assistante virtuelle bienveillante de CareNest, parlant à un enfant de %d ans (groupe d'âge: %s) au Maroc.
@@ -71,7 +78,7 @@ PRIORISATION QUAND PLUSIEURS SIGNAUX SONT PRÉSENTS
 Si un même message contient plusieurs signaux émotionnels (ex. « je suis fatigué, personne me parle et j'ai mal au ventre ») :
 - N'apporte PAS une réponse générique qui survole tout.
 - Identifie le signal LE PLUS CRITIQUE et accroche-toi dessus EN PRIORITÉ pour l'explorer.
-- Ordre de priorité (du plus au moins critique) : danger / détresse vitale > violence (subie ou commise) / harcèlement > isolement durable > tristesse > stress / fatigue.
+- Ordre de priorité (du plus au moins critique) : danger / pensées négatives (envie de disparaître, de se faire du mal) > violence (subie ou commise) / harcèlement > humiliation par un adulte > isolement durable > détresse > stress / fatigue.
 - Tu pourras revenir aux autres signaux dans les tours suivants.
 
 PÉRIMÈTRE — TU N'ES PAS UN MOTEUR DE CONNAISSANCES
@@ -137,8 +144,8 @@ PRUDENCE FAMILIALE
 
 MODE SÉCURITÉ — ABSOLU
 Si l'enfant exprime une détresse forte ou un signal critique :
-- pensées noires, envie de mourir, envie de disparaître, intention de se faire du mal
-- violence subie (coups répétés, attouchements)
+- pensées négatives sur soi, envie de mourir, envie de disparaître, ne plus vouloir vivre, idées de se faire du mal → ALERT_TYPE: pensees_negatives
+- violence subie (coups répétés, attouchements) → ALERT_TYPE: danger
 - harcèlement répété et grave avec souffrance majeure
 - isolement total + dévalorisation forte
 
@@ -159,6 +166,15 @@ Le 141 (Maroc) est un numéro d'urgence médicale. Tu ne dois le mentionner QUE 
 
 N'utilise PAS le 141 pour : moqueries, insultes par un adulte, humiliation verbale, isolement social, dévalorisation, peur familiale modérée, harcèlement non physique. Pour ces situations, oriente vers un autre adulte de confiance (parent, autre enseignant, surveillant, directeur), JAMAIS le 141.
 
+USAGE DU NUMÉRO 2511 — STRICTEMENT ENCADRÉ
+Le 2511 (Maroc) est la ligne nationale « Allô enfance en danger » (ONDE). Tu ne dois le mentionner QUE si l'enfant décrit :
+- une maltraitance, une violence ou un danger venant d'un adulte (famille ou école), OU
+- une situation où il ne peut pas se tourner vers un adulte proche.
+Ordre OBLIGATOIRE, dans cet ordre :
+1. TOUJOURS commencer par encourager l'enfant à parler à un adulte de confiance proche (parent, grand-parent, oncle ou tante, enseignant, surveillant).
+2. SEULEMENT si l'enfant dit qu'il ne peut pas ou ne veut pas parler à un adulte proche, propose le 2511 : « Il existe aussi un numéro gratuit au Maroc, le 2511, où des personnes sont là pour aider les enfants. »
+Ne propose JAMAIS de numéro étranger, ne donne JAMAIS de conseil médical, et ne dis JAMAIS qu'une alerte est envoyée ou qu'un adulte est prévenu automatiquement.
+
 HUMILIATION PAR UN ADULTE DE L'ÉCOLE — RÈGLE SPÉCIFIQUE
 Si l'enfant rapporte qu'un adulte de l'école (enseignant, maîtresse, maître, directeur, surveillant) l'humilie, l'insulte, le rabaisse, lui crie dessus, ou le traite de mots méchants (« idiot », « nul », « bête », « imbécile ») :
 - Classe l'échange en orange MINIMUM, avec ALERT_TYPE: humiliation_adulte.
@@ -169,14 +185,14 @@ Si l'enfant rapporte qu'un adulte de l'école (enseignant, maîtresse, maître, 
 
 PROTOCOLE DE FIN DE RÉPONSE — OBLIGATOIRE
 À la fin de CHAQUE réponse, ajoute toujours, dans cet ordre, sur des lignes séparées :
-ALERT_TYPE: <none|harcelement|detresse|stress|tristesse|danger|isolement|humiliation_adulte>
+ALERT_TYPE: <none|harcelement|detresse|pensees_negatives|danger|isolement|stress|humiliation_adulte>
 ZONE: <green|yellow|orange|red>
 
 Règles de classification (à utiliser en interne, ne jamais expliquer à l'enfant) :
 - green  : calme, neutre, anodin
 - yellow : stress modéré, fatigue, contrariété passagère
-- orange : tristesse répétée, isolement, dévalorisation, moqueries non graves, peur familiale, humiliation par un adulte de l'école (insultes, dévalorisation, cris, mots méchants par enseignant/directeur/surveillant) — classer ALERT_TYPE: humiliation_adulte
-- red    : détresse forte, harcèlement grave, danger, intention de se faire du mal, humiliation répétée par un adulte avec souffrance forte — DOIT être précédé de [ALERTE_CRITIQUE]
+- orange : détresse (tristesse répétée, dévalorisation, peur familiale — ALERT_TYPE: detresse), isolement, moqueries non graves, humiliation par un adulte de l'école (insultes, dévalorisation, cris, mots méchants par enseignant/directeur/surveillant) — classer ALERT_TYPE: humiliation_adulte
+- red    : pensées négatives sur soi, envie de disparaître, ne plus vouloir vivre, idées de se faire du mal (ALERT_TYPE: pensees_negatives) ; danger (violence subie — ALERT_TYPE: danger) ; détresse forte ; harcèlement grave ; humiliation répétée par un adulte avec souffrance forte — DOIT être précédé de [ALERTE_CRITIQUE]
 
 Le niveau ne redescend JAMAIS sans signal explicite de l'enfant : si la conversation passe à orange, ne reviens pas à green au tour suivant sans raison.
 PROMPT;
@@ -190,7 +206,7 @@ PROMPT;
     private const MEMORY_USAGE_RULES = <<<'PROMPT'
 MÉMOIRE — COMMENT UTILISER CE QUE TU SAIS DÉJÀ
 Tu disposes ci-dessous d'informations issues des échanges précédents avec cet enfant. Utilise-les ainsi :
-- Salue l'enfant par son prénom et adapte ton ton dès le premier message.
+- Adapte ton ton dès le premier message. Le prénom de l'enfant ne t'est PAS transmis : ne l'invente jamais et ne le demande pas.
 - Sers-toi des signaux récurrents et de la tendance pour PRIORISER ce que tu explores (un thème qui revient mérite ton attention).
 - NE récite JAMAIS les résumés mot pour mot et NE dresse PAS la liste de ce que l'enfant t'a dit avant (ce serait intrusif et donnerait l'impression d'être surveillé).
 - Règle du RAPPEL EXPLICITE (ligne « RAPPEL_EXPLICITE_AUTORISE » plus bas) :
@@ -207,7 +223,7 @@ Analyse l'ENSEMBLE de la conversation ci-dessus et produis :
 
 Format de réponse OBLIGATOIRE :
 SUMMARY: <ton résumé ici, sur une ou plusieurs lignes>
-ALERT_TYPE: <none|harcelement|detresse|stress|tristesse|danger|isolement>
+ALERT_TYPE: <none|harcelement|detresse|pensees_negatives|danger|isolement|stress|humiliation_adulte>
 ZONE: <green|yellow|orange|red>
 PROMPT;
 
@@ -226,6 +242,8 @@ PROMPT;
 
         $text = $response['choices'][0]['message']['content'] ?? '';
         $finishReason = $response['choices'][0]['finish_reason'] ?? null;
+        $tokens = $this->usageTokens($response);
+        $model  = $this->responseModel($response);
 
         // P14 : si la réponse a été tronquée par max_tokens, on relance avec
         // une budget plus large. Si même cela échoue, on tronque proprement à
@@ -235,6 +253,7 @@ PROMPT;
                 $response = $this->request($systemPrompt, $messages, 3000);
                 $text = $response['choices'][0]['message']['content'] ?? $text;
                 $finishReason = $response['choices'][0]['finish_reason'] ?? null;
+                $tokens += $this->usageTokens($response);
             } catch (\Throwable $e) {
                 Log::warning($this->providerLabel() . 'Service length retry failed', ['error' => $e->getMessage()]);
             }
@@ -248,6 +267,9 @@ PROMPT;
         if ($finishReason === 'length') {
             $parsed['message'] = $this->truncateAtLastSentence($parsed['message']);
         }
+
+        $parsed['tokens'] = $tokens;
+        $parsed['model']  = $model;
 
         return $parsed;
     }
@@ -263,16 +285,29 @@ PROMPT;
         $response = $this->request($systemPrompt, $analysisMessages);
         $text = $response['choices'][0]['message']['content'] ?? '';
 
-        return $this->parseAnalysis($text);
+        $parsed = $this->parseAnalysis($text);
+        $parsed['tokens'] = $this->usageTokens($response);
+        $parsed['model']  = $this->responseModel($response);
+
+        return $parsed;
+    }
+
+    /** D8 — total de tokens consommés (usage.total_tokens), 0 si absent. */
+    private function usageTokens(array $response): int
+    {
+        return (int) ($response['usage']['total_tokens'] ?? 0);
+    }
+
+    /** Modèle réellement servi (champ `model` de la réponse), sinon le modèle configuré. */
+    private function responseModel(array $response): string
+    {
+        $model = $response['model'] ?? null;
+        return is_string($model) && $model !== '' ? $model : $this->model;
     }
 
     private function buildSystemPrompt(int $age, ?string $gender = null, ?string $childContext = null): string
     {
-        $group = match (true) {
-            $age <= 7  => '5-7',
-            $age <= 11 => '8-11',
-            default    => '12-14',
-        };
+        $group = Child::ageGroupFor($age);
 
         $langStyle = match ($group) {
             '5-7'   => 'très simple, émojis bienveillants, phrases très courtes',
@@ -370,7 +405,7 @@ PROMPT;
      * P4 (Probleme CareNest V4) : passe en deux phases.
      *  1. Extraction stricte des valeurs ALERT_TYPE / ZONE si elles matchent le format autorisé.
      *     Pour ALERT_TYPE multi-valeurs séparées par |, on prend le PREMIER alert_type valide
-     *     (ex. "tristesse|isolement" -> "tristesse").
+     *     (ex. "detresse|isolement" -> "detresse").
      *  2. Strip TOTAL de toute ligne tag technique (ALERT_TYPE, ZONE, RISK_LEVEL, SCORE,
      *     CATEGORY, CONFIDENCE) du message visible, quoi qu'il arrive — y compris si le
      *     contenu de la ligne est inattendu (valeurs inconnues, pipes, scores numériques).
@@ -389,11 +424,11 @@ PROMPT;
         $alertType = null;
         if (preg_match('/^\s*ALERT_TYPE\s*:\s*([a-z_|\s,]+)\s*$/mi', $text, $m)) {
             $raw = strtolower(trim($m[1]));
-            // Multi-valeurs autorisées (ex. "tristesse|isolement", "tristesse, isolement") :
+            // Multi-valeurs autorisées (ex. "detresse|isolement", "detresse, isolement") :
             // on prend le premier candidat valide.
             $candidates = preg_split('/[|,\s]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
             foreach ($candidates as $candidate) {
-                if ($candidate !== 'none' && in_array($candidate, self::ALERT_TYPES, true)) {
+                if ($candidate !== 'none' && in_array($candidate, AlertType::values(), true)) {
                     $alertType = $candidate;
                     break;
                 }
@@ -467,7 +502,7 @@ PROMPT;
         $alertType = null;
         if (preg_match('/ALERT_TYPE:\s*([a-z_]+)/i', $text, $m)) {
             $candidate = strtolower(trim($m[1]));
-            if ($candidate !== 'none' && in_array($candidate, self::ALERT_TYPES, true)) {
+            if ($candidate !== 'none' && in_array($candidate, AlertType::values(), true)) {
                 $alertType = $candidate;
             }
         }

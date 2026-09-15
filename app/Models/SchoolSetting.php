@@ -11,6 +11,12 @@ class SchoolSetting extends Model
         'alert_threshold',
         'email_notifications',
         'language',
+        'school_hours_start',
+        'school_hours_end',
+        'daily_token_cap',
+        'session_max_minutes',
+        'referent_phone',
+        'admin_phone',
     ];
 
     protected function casts(): array
@@ -18,6 +24,8 @@ class SchoolSetting extends Model
         return [
             'email_notifications' => 'boolean',
             'alert_threshold'     => 'integer',
+            'daily_token_cap'     => 'integer',
+            'session_max_minutes' => 'integer',
         ];
     }
 

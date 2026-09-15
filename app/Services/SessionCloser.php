@@ -84,11 +84,15 @@ class SessionCloser
             $finalZone      = $this->detector->maxZone($currentZone, $analysis['zone']);
             $finalAlertType = $analysis['alert_type'] ?? $currentAlertType;
 
+            // D8 / D10 (v3) — traçabilité : tokens consommés, version de prompt, modèle.
             $session->update([
                 'ended_at'       => now(),
                 'zone'           => $finalZone,
                 'ai_summary'     => $analysis['summary'],
                 'low_confidence' => $analysis['lowConfidence'],
+                'tokens_used'    => (int) $session->tokens_used + (int) ($analysis['tokens'] ?? 0),
+                'prompt_version' => $session->prompt_version ?? GeminiService::PROMPT_VERSION,
+                'model'          => $analysis['model'] ?? $session->model,
             ]);
 
             $alertCreated = $this->maybeCreateAlert(
@@ -156,12 +160,17 @@ class SessionCloser
             ? 'critical'
             : $this->levelResolver->resolve($alertType, $zone, $userContents);
 
+        // D10 (v3) — summary = résumé IA de la session (chiffré au repos) + traçabilité prompt/modèle.
+        $session->refresh();
         Alert::create([
-            'session_id' => $session->id,
-            'child_id'   => $child->id,
-            'school_id'  => $child->school_id,
-            'type'       => $alertType ?? 'detresse',
-            'level'      => $level,
+            'session_id'     => $session->id,
+            'child_id'       => $child->id,
+            'school_id'      => $child->school_id,
+            'type'           => $alertType ?? 'detresse',
+            'level'          => $level,
+            'summary'        => $session->ai_summary,
+            'prompt_version' => $session->prompt_version ?? GeminiService::PROMPT_VERSION,
+            'model'          => $session->model,
         ]);
 
         return true;

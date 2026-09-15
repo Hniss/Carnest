@@ -2,28 +2,43 @@
 
 namespace App\Services;
 
+use App\Enums\AlertType;
+
 /**
  * Filet de sécurité déterministe : si l'IA passe à côté d'un signal critique
  * (P9, P10, P11), on force une montée de zone côté backend à partir de
  * marqueurs lexicaux explicites. Ne stocke aucun message — analyse en mémoire,
  * retourne uniquement zone et type d'alerte.
+ *
+ * D7 (v3) : types alignés sur App\Enums\AlertType. Les motifs rouges de
+ * pensées négatives (envie de mourir, disparaître, se faire du mal, en finir)
+ * retournent `pensees_negatives` ; la violence subie retourne `danger`.
  */
 class CrisisDetector
 {
-    /** Phrases / motifs « rouge » : détresse forte, intention de se faire du mal, violence subie. */
+    /**
+     * Motifs « rouge » — chaque entrée porte le type d'alerte vital correspondant.
+     * pensees_negatives : intention de se faire du mal, envie de mourir / disparaître.
+     * danger            : violence physique ou sexuelle subie.
+     */
     private const RED_PATTERNS = [
-        '\bme\s+(faire|fer)\s+du\s+mal\b',
-        '\b(envie|veux|voudrais)\s+(de\s+)?mourir\b',
-        '\bplus\s+envie\s+de\s+vivre\b',
-        '\bje\s+veux\s+(plus|pu)\s+(être\s+là|exister|vivre)\b',
-        '\bme\s+(tuer|suicider)\b',
-        '\bsuicide\b',
-        '\b(en\s+finir|finir\s+avec\s+(ça|tout))\b',
-        '\bils\s+me\s+(frappent|tapent|battent)\b',
-        '\b(papa|maman|mon\s+père|ma\s+mère)\s+me\s+(frappe|tape|bat)\b',
-        '\b(touche|attouche)\b.{0,20}\b(parties\s+intimes|sexe|corps)\b',
-        '\bje\s+(veux|voudrais)\s+disparaitre\b',
-        '\bjsuis\s+nul\s+je\s+sers\s+(à\s+)?rien\b',
+        // Pensées négatives sur soi, envie de disparaître, ne plus vouloir vivre
+        ['type' => 'pensees_negatives', 'rx' => '\bme\s+(faire|fer)\s+du\s+mal\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\b(envie|veux|voudrais)\s+(de\s+)?mourir\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bje\s+veux\s+mourir\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bje\s+(veux|voudrais)\s+dispara[iî]tre\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bplus\s+envie\s+de\s+vivre\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bj\'?en\s+peux\s+plus\s+de\s+vivre\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bje\s+veux\s+(plus|pu)\s+(être\s+là|exister|vivre)\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bme\s+(tuer|suicider)\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bsuicide\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\b(en\s+finir|finir\s+avec\s+(ça|tout))\b'],
+        ['type' => 'pensees_negatives', 'rx' => '\bjsuis\s+nul\s+je\s+sers\s+(à\s+)?rien\b'],
+
+        // Violence subie (danger vital)
+        ['type' => 'danger', 'rx' => '\bils\s+me\s+(frappent|tapent|battent)\b'],
+        ['type' => 'danger', 'rx' => '\b(papa|maman|mon\s+père|ma\s+mère)\s+me\s+(frappe|tape|bat)\b'],
+        ['type' => 'danger', 'rx' => '\b(touche|attouche)\b.{0,20}\b(parties\s+intimes|sexe|corps)\b'],
     ];
 
     /** Phrases « orange » : signaux importants mais pas critiques en eux-mêmes. */
@@ -37,7 +52,6 @@ class CrisisDetector
         ['type' => 'danger', 'rx' => '\bj\'?ai\s+gifl\w*'],
         ['type' => 'danger', 'rx' => '\bje\s+(l\'|lui\s+)ai\s+(gifl\w*|frapp\w*|tap\w*|cogn\w*|mis\s+un\s+coup|mis\s+une\s+(gifle|claque))'],
         ['type' => 'danger', 'rx' => '\bj\'?ai\s+(frapp\w*|tap\w*|cogn\w*|battu)\s+(un|une|mon|ma|le|la|quelqu|.{0,6}\b(fille|gar[çc]on|copain|copine|camarade|[eé]l[èe]ve))'],
-
 
         // P10 (V4) — Humiliation par un adulte de l'école.
         // Important : ces patterns sont placés AVANT les patterns harcèlement génériques
@@ -59,11 +73,11 @@ class CrisisDetector
         ['type' => 'isolement',   'rx' => '\bpersonne\s+ne\s+me\s+(parle|aime|comprend)\b'],
         ['type' => 'isolement',   'rx' => '\bj\'?ai\s+pas\s+d\'?amis?\b'],
 
-        // Peur / dévalorisation forte
+        // Peur / dévalorisation forte (D7 : ex-tristesse -> detresse)
         ['type' => 'detresse',    'rx' => '\bj\'?ai\s+(tr[èe]s\s+)?peur\s+(de|qu[\'e])\s+(mes?\s+(parents|p[èe]re|m[èe]re)|papa|maman)\b'],
-        ['type' => 'tristesse',   'rx' => '\bje\s+(suis|me\s+sens)\s+nul\b'],
-        ['type' => 'tristesse',   'rx' => '\bje\s+sers\s+(à\s+)?rien\b'],
-        ['type' => 'tristesse',   'rx' => '\bpersonne\s+ne\s+m\'?aime\b'],
+        ['type' => 'detresse',    'rx' => '\bje\s+(suis|me\s+sens)\s+nul\b'],
+        ['type' => 'detresse',    'rx' => '\bje\s+sers\s+(à\s+)?rien\b'],
+        ['type' => 'detresse',    'rx' => '\bpersonne\s+ne\s+m\'?aime\b'],
     ];
 
     /**
@@ -74,11 +88,11 @@ class CrisisDetector
     {
         $msg = $this->normalize($childMessage);
 
-        foreach (self::RED_PATTERNS as $pattern) {
-            if (preg_match('/' . $pattern . '/iu', $msg)) {
+        foreach (self::RED_PATTERNS as $entry) {
+            if (preg_match('/' . $entry['rx'] . '/iu', $msg)) {
                 return [
                     'zone'       => 'red',
-                    'alert_type' => 'detresse',
+                    'alert_type' => $entry['type'],
                     'matched'    => true,
                 ];
             }
@@ -108,6 +122,12 @@ class CrisisDetector
         $ra = $rank[$a] ?? 0;
         $rb = $rank[$b] ?? 0;
         return $ra >= $rb ? $a : $b;
+    }
+
+    /** Garantit que tout type retourné appartient à la nomenclature unique (D7). */
+    public static function knownTypes(): array
+    {
+        return AlertType::values();
     }
 
     private function normalize(string $text): string

@@ -30,7 +30,8 @@ Route::post('/logout', function () {
 })->middleware('auth')->name('logout');
 
 // ── Child auth ──────────────────────────────────────────
-Route::get('/child/login', ChildLogin::class)->name('child.login');
+// D10 (v3) — limitation de débit sur la page de connexion enfant (10 req / min / IP).
+Route::get('/child/login', ChildLogin::class)->middleware('throttle:10,1,login-child')->name('child.login');
 Route::post('/child/logout', function () {
     auth('child')->logout();
     return redirect()->route('child.login');

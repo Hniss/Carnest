@@ -81,17 +81,31 @@ class ChildContextBuilderTest extends TestCase
         $this->assertNull($this->builder->build($child, $this->now));
     }
 
-    public function test_builds_block_with_identity_after_history(): void
+    public function test_builds_block_without_identity_after_history(): void
     {
+        // D10 (v3) : aucun prénom, nom ni classe ne part vers le fournisseur d'IA.
         $child = $this->makeChild(['name' => 'Yassine Test', 'classe' => 'CM1']);
         $this->makeClosedSession($child, 'green', $this->now->subDays(2), 'Bonne journée, enfant détendu.');
 
         $block = $this->builder->build($child, $this->now);
 
         $this->assertNotNull($block);
-        $this->assertStringContainsString('Yassine', $block);
-        $this->assertStringContainsString('CM1', $block);
+        $this->assertStringNotContainsString('Yassine', $block);
+        $this->assertStringNotContainsString('CM1', $block);
+        $this->assertStringNotContainsString('Prénom', $block);
+        $this->assertStringNotContainsString('Classe', $block);
         $this->assertStringContainsString('Sessions précédentes : 1', $block);
+    }
+
+    public function test_recurring_pensees_negatives_is_serious(): void
+    {
+        $child = $this->makeChild();
+        $this->makeAlert($child, 'pensees_negatives', 'critical', $this->now->subDays(3));
+        $this->makeAlert($child, 'pensees_negatives', 'critical', $this->now->subDays(8));
+
+        $block = $this->builder->build($child, $this->now);
+
+        $this->assertStringContainsString('RAPPEL_EXPLICITE_AUTORISE : oui', $block);
     }
 
     public function test_recurring_serious_signal_enables_explicit_recall(): void
@@ -111,7 +125,7 @@ class ChildContextBuilderTest extends TestCase
     {
         $child = $this->makeChild();
         // Une seule alerte → pas récurrent → rappel explicite NON autorisé.
-        $this->makeAlert($child, 'tristesse', 'moderate', $this->now->subDays(3));
+        $this->makeAlert($child, 'stress', 'moderate', $this->now->subDays(3));
 
         $block = $this->builder->build($child, $this->now);
 

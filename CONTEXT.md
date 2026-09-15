@@ -6,7 +6,7 @@
 
 ## 1. Vision Produit
 
-**CareNest** est une plateforme de détection du bien-être émotionnel des enfants (5–14 ans) en milieu scolaire au Maroc.
+**CareNest** est une plateforme de détection du bien-être émotionnel des enfants (5–18 ans, pilote 8–14) en milieu scolaire au Maroc.
 
 - **Côté enfant :** un chat conversationnel avec un assistant IA bienveillant ("Care") adapté à l'âge.
 - **Côté admin (école) :** dashboard d'alertes, score climat scolaire, suivi des enfants à risque.
@@ -61,7 +61,7 @@ Ce projet utilise **3 agents spécialisés** + 1 reviewer. Chaque agent a son p�
 1. **Aucun message brut d'enfant n'est stocké en BDD.** On stocke uniquement : résumé IA, zone (green/yellow/orange/red), type d'alerte.
 2. **L'IA ne dit JAMAIS à l'enfant qu'elle analyse ses émotions.**
 3. **Une seule question à la fois** dans le chat enfant.
-4. **Adaptation au groupe d'âge** obligatoire (5-7 / 8-11 / 12-14).
+4. **Adaptation au groupe d'âge** obligatoire (5-7 / 8-11 / 12-18).
 5. **Zones de Regulation (Kuypers)** : green=100, yellow=70, orange=35, red=0.
 6. **Score climat** = moyenne des `score_enfant` sur **7 jours glissants** (pas la journée).
 7. **Alertes push/email** uniquement pour zone **rouge**. Orange = dashboard seulement.
@@ -179,15 +179,28 @@ backend/                         # Laravel app
   - **#9 Priorisation multi-signaux** : règle prompt — accrocher sur le signal le plus critique (danger > violence/harcèlement > isolement > tristesse > stress).
   - Tests : +21 (`ChildContextBuilderTest` ×5, `SessionCloserTest` ×6, `SessionCloseBeaconTest` ×3, `ChatInterfaceMemoryTest` ×4, `CrisisDetectorTest` +3). **140 passed**.
 
+- [x] **Lot 0 — MVP v3 (2026-09-15)** : schéma, sécurité, types d'alerte, configuration IA (décisions D3, D6, D7, D8-schéma, D10 du document « décisions et plan »).
+  - **Types unifiés (D7)** : enum `App\Enums\AlertType` (7 valeurs : `harcelement`, `detresse`, `pensees_negatives`, `danger`, `isolement`, `stress`, `humiliation_adulte` ; vitaux = `danger` + `pensees_negatives`), source de vérité du prompt, du `CrisisDetector`, des résolveurs et des libellés admin. `tristesse` fusionné dans `detresse` (migration `2026_09_15_000001_unify_alert_types`, MySQL + SQLite). Motifs rouges du filet déterministe typés `pensees_negatives` (self-harm) ou `danger` (violence subie).
+  - **2511 (D5/D10)** : section « USAGE DU NUMÉRO 2511 » dans le prompt système — adulte de confiance proche d'abord, 2511 seulement si l'enfant ne peut/veut pas ; jamais de numéro étranger, jamais de conseil médical, jamais dire qu'une alerte est envoyée.
+  - **Pseudonymisation (D10)** : aucun prénom, nom d'école ni classe n'est envoyé au fournisseur d'IA (`ChildContextBuilder` sans identité ; welcome nominatif construit côté serveur et retiré du contexte IA). Test `PseudonymisationTest` sur le payload réel.
+  - **Cloisonnement multi-école (D10)** : `Dashboard::resolveAlert()` vérifie l'école de l'utilisateur (403 sinon, 404 si inconnue).
+  - **Chiffrement au repos (D10)** : cast `encrypted` sur `chat_sessions.ai_summary`, `chat_sessions.care_memory`, `admin_notes.content`, `alerts.summary` ; migration `2026_09_15_000002_encrypt_existing_summaries` (rejouable, chiffre les lignes en clair). Aucune requête ne filtre sur ces colonnes.
+  - **Limitation de débit (D10)** : 20 messages/min/enfant dans `ChatInterface::sendMessage()` (message doux, aucun appel IA) ; `throttle:10,1` sur les pages de connexion admin et enfant ; 10 tentatives/min sur le formulaire de connexion enfant.
+  - **Mots de passe de démonstration hors dépôt (D10)** : `DatabaseSeeder` lit `DEMO_ADMIN_PASSWORD` / `DEMO_CHILD_PASSWORD`, sinon génère et affiche en console.
+  - **Schéma v3 (D3, D8, D9 préparation)** : migration `2026_09_15_000003_extend_schema_v3` — `children.birth_date` / `deactivated_at`, `age_group` 5-7 / 8-11 / 12-18 (accesseur `Child::age`, `Child::ageGroupFor()`), `chat_sessions.tokens_used` / `prompt_version` / `model` / `care_memory`, `alerts.summary` / `signals` / `prompt_version` / `model` / `adjudication`, `school_settings` horaires + `daily_token_cap` + `session_max_minutes` + téléphones, `users.role` / `phone`, `school_user.role` étendu à `referent`.
+  - **Configuration IA (D6, D8)** : `OPENAI_BASE_URL` (défaut UE), `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL` ; `GeminiService::PROMPT_VERSION = 'v3.0'` ; `chat()` / `analyzeSession()` renvoient `tokens` et `model` ; tokens cumulés sur la session, version de prompt et modèle tracés sur la session et l'alerte. Le plafond journalier (D8 comportement) viendra au lot 2.
+  - **Avatar de Care (D4)** : `public/img/care/care-avatar.png` en en-tête du chat (64 px ; 40 px pour 12-18) et en vignette 28 px dans les bulles (5-7 et 8-11 uniquement).
+  - Tests : 140 → 192 (types, âge, schéma, chiffrement, débit, IDOR, pseudonymisation, télémétrie, avatar).
+
 ### Réserves QA ouvertes (non bloquantes)
 - Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système). **Atténué V6** : le beacon de clôture (#1) ferme désormais la session dès la fermeture/actualisation de fenêtre ; `CloseIdleSessions` n'est plus que le filet ultime.
 - **V6** : le canal email d'alerte critique reste différé (décision PO #2). Aujourd'hui l'alerte rouge est créée en temps réel + remonte au dashboard via polling, mais **aucun push/email** n'est envoyé. À implémenter (Notification Laravel sur `level=critical`) quand le SMTP sera configuré.
 - **V6** : le beacon dépend de `navigator.sendBeacon` (best-effort). En cas d'échec réseau au unload, `CloseIdleSessions` reprend le relais après ≤ 5 min. À valider en prod réelle (mobile notamment).
 - **V6** : le pattern `CrisisDetector` de violence commise (#6) est volontairement étroit — à élargir prudemment selon les faux négatifs observés en prod.
 - Tests E2E manuels : reprendre les 9 cas du document `Probleme CareNest V5` après déploiement pour valider la régression.
-- **V5** : `chat_sessions.ai_summary` n'est pas chiffré au repos (`encrypted` cast). Décision PO différée — à confirmer ; impact : rechiffrement one-shot des données existantes si activation tardive.
+- ~~**V5** : `chat_sessions.ai_summary` n'est pas chiffré au repos.~~ **Réglé au lot 0 v3** (cast `encrypted` + migration de rechiffrement).
 - **V5** : pas de FormRequest dédié pour `ChildProfile::addNote` (validation inline). Acceptable pour 1 champ, à externaliser si la note gagne en complexité.
-- **V5** : pas de rate-limiting sur `resolveAlert` / `addNote` (route admin authentifiée, mais à ajouter pour audit anti-abus).
+- **V5** : pas de rate-limiting sur `resolveAlert` / `addNote` (route admin authentifiée, mais à ajouter pour audit anti-abus). Le lot 0 v3 a posé le débit côté chat enfant et connexions.
 - **V5** : Tester en prod réelle le passage à un provider de fallback (Anthropic) si Gemini reste indisponible plus de N minutes — décision PO : différer (filet anti-boucle suffit pour MVP).
 
 ---
