@@ -13,55 +13,34 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
+    <style>[x-cloak]{display:none !important}</style>
 </head>
 <body class="bg-stone-50 text-stone-900 antialiased">
 
-<div class="min-h-screen flex">
+@php $homeUrl = auth()->user()->homePath(); @endphp
+<div class="min-h-screen flex" x-data="{ drawer: false }" @keydown.escape.window="drawer = false">
 
-    {{-- Sidebar --}}
+    {{-- Sidebar (desktop) --}}
     <aside class="hidden lg:flex w-[248px] shrink-0 flex-col bg-white border-r border-stone-200">
-        {{-- Brand --}}
-        <div class="px-5 pt-6 pb-5">
-            <a href="{{ route('dashboard') }}" class="inline-flex items-center">
+        <div class="px-5 pt-6 pb-5 flex items-center justify-between">
+            <a href="{{ $homeUrl }}" class="inline-flex items-center">
                 <x-carenest-logo variant="full" class="h-9 w-auto" />
             </a>
+            <livewire:shared.notification-bell />
         </div>
 
-        {{-- Nav --}}
         <nav class="flex-1 px-3 space-y-0.5">
-            <div class="eyebrow px-3 pt-4 pb-2">Pilotage</div>
-            <a href="{{ route('dashboard') }}"
-               class="nav-item {{ request()->routeIs('dashboard') ? 'nav-item-active' : '' }}">
-                <x-icon name="dashboard" class="nav-icon" />
-                Tableau de bord
-            </a>
-            <a href="{{ route('dashboard') }}#students" class="nav-item">
-                <x-icon name="users" class="nav-icon" />
-                Élèves
-            </a>
-            <a href="{{ route('dashboard') }}#alerts" class="nav-item">
-                <x-icon name="bell" class="nav-icon" />
-                Alertes
-            </a>
-
-            <div class="eyebrow px-3 pt-6 pb-2">Paramètres</div>
-            <a href="{{ route('admin.settings') }}"
-               class="nav-item {{ request()->routeIs('admin.settings') ? 'nav-item-active' : '' }}"
-               wire:navigate>
-                <x-icon name="settings" class="nav-icon" />
-                Établissement
-            </a>
+            @include('layouts.partials.nav-links')
         </nav>
 
-        {{-- User card --}}
         <div class="p-3 border-t border-stone-100">
             <div class="flex items-center gap-3 p-2 rounded-lg">
                 <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-900 flex items-center justify-center font-semibold text-sm shrink-0">
-                    {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                    {{ strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium text-stone-900 truncate">{{ auth()->user()->name }}</div>
-                    <div class="text-xs text-stone-500 truncate">{{ auth()->user()->email }}</div>
+                    <div class="text-xs text-stone-500 truncate">{{ \App\Models\User::roleLabel(auth()->user()->role) }}</div>
                 </div>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
@@ -76,17 +55,47 @@
     </aside>
 
     {{-- Mobile top bar --}}
-    <div class="lg:hidden fixed top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200 px-4 py-3 flex items-center justify-between">
-        <a href="{{ route('dashboard') }}" class="inline-flex items-center">
+    <div class="lg:hidden fixed top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200 px-4 py-2.5 flex items-center justify-between gap-2">
+        <button type="button" @click="drawer = true" class="p-2 -ml-2 rounded-lg text-stone-600 hover:bg-stone-100" aria-label="Ouvrir le menu">
+            <x-icon name="menu" size="20" />
+        </button>
+        <a href="{{ $homeUrl }}" class="inline-flex items-center">
             <x-carenest-logo variant="full" class="h-7 w-auto" />
         </a>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="btn-ghost btn-sm">
-                <x-icon name="log-out" size="14" />
-                Quitter
-            </button>
-        </form>
+        <livewire:shared.notification-bell />
+    </div>
+
+    {{-- Mobile drawer --}}
+    <div x-show="drawer" x-cloak class="lg:hidden fixed inset-0 z-30">
+        <div class="absolute inset-0 bg-stone-900/40" @click="drawer = false"></div>
+        <aside class="absolute top-0 left-0 bottom-0 w-[280px] max-w-[85vw] bg-white shadow-elevated flex flex-col"
+               x-show="drawer" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
+               x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full">
+            <div class="px-5 pt-5 pb-4 flex items-center justify-between">
+                <x-carenest-logo variant="full" class="h-8 w-auto" />
+                <button type="button" @click="drawer = false" class="p-2 rounded-lg text-stone-500 hover:bg-stone-100" aria-label="Fermer le menu">
+                    <x-icon name="x" size="18" />
+                </button>
+            </div>
+            <nav class="flex-1 px-3 space-y-0.5 overflow-y-auto" @click="drawer = false">
+                @include('layouts.partials.nav-links')
+            </nav>
+            <div class="p-3 border-t border-stone-100">
+                <div class="flex items-center gap-3 p-2">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-stone-900 truncate">{{ auth()->user()->name }}</div>
+                        <div class="text-xs text-stone-500 truncate">{{ \App\Models\User::roleLabel(auth()->user()->role) }}</div>
+                    </div>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="btn-ghost btn-sm">
+                            <x-icon name="log-out" size="14" />
+                            Déconnexion
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </aside>
     </div>
 
     {{-- Main --}}
@@ -96,7 +105,7 @@
                 <div class="max-w-7xl mx-auto py-5 px-6 lg:px-10">{{ $header }}</div>
             </header>
         @endif
-        <div class="max-w-7xl mx-auto px-6 lg:px-10 py-8 lg:py-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-10">
             {{ $slot }}
         </div>
     </main>

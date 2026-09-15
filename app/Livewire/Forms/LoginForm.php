@@ -30,7 +30,8 @@ class LoginForm extends Form
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only(['email', 'password']), $this->remember)) {
+        // Lot 1 — un compte école désactivé ne peut plus se connecter (message neutre identique).
+        if (! Auth::attempt($this->only(['email', 'password']) + ['deactivated_at' => null], $this->remember)) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

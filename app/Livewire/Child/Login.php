@@ -39,6 +39,15 @@ class Login extends Component
             return;
         }
 
+        // Lot 1 §4 — compte enfant désactivé (sans consentement, retrait, décision admin) :
+        // refus avec un message neutre, aucune indication sur la cause.
+        if (Auth::guard('child')->user()->isDeactivated()) {
+            Auth::guard('child')->logout();
+            RateLimiter::hit($key, 60);
+            $this->addError('email', 'Identifiants incorrects.');
+            return;
+        }
+
         RateLimiter::clear($key);
 
         $this->redirect(route('child.chat'), navigate: true);

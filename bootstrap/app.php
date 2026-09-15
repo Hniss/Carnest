@@ -17,6 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'chat/close',
         ]);
+
+        // Lot 1 (MVP v3) — cloisonnement par rôle : role:admin / role:referent / role:parent.
+        $middleware->alias([
+            'role' => \App\Http\Middleware\EnsureRole::class,
+        ]);
+
+        // Lot 1 — un utilisateur déjà connecté qui ouvre /login est renvoyé vers SON espace (pas /dashboard).
+        $middleware->redirectUsersTo(fn () => auth()->user()?->homePath() ?? '/dashboard');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

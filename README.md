@@ -8,10 +8,23 @@ Plateforme de bien-être émotionnel pour élèves marocains (5-18 ans, pilote 8
 
 ## Aperçu
 
-| Espace | Public | Fonction |
-|---|---|---|
-| `/login` | Admin / direction | Tableau de bord — score climat, élèves à suivre, alertes |
-| `/child/login` | Élève | Chat avec **Care**, l'assistant IA |
+| Espace | Rôle | URL | Fonction |
+|---|---|---|---|
+| Administration | `admin` | `/login` → `/dashboard` | Score climat, zones par classe, charge d'alertes (sans nom d'élève), urgences vitales sans accusé, élèves (`/dashboard/eleves`), comptes école (`/dashboard/comptes`), journal d'accès (`/dashboard/journal`), paramètres (`/settings`) |
+| Référent | `referent` | `/login` → `/dashboard-referent` | Vue d'ensemble, élèves, fiche élève, traitement d'alerte en 5 étapes, messagerie parents, délégation |
+| Parent | `parent` | `/login` → `/parent` | Synthèse de l'école, journal, messagerie avec le référent, consentement, export de ses données |
+| Élève | — | `/child/login` → `/chat` | Chat avec **Care**, l'assistant IA |
+
+**Comptes de démonstration** (`php artisan db:seed`, mots de passe lus dans l'environnement : `DEMO_ADMIN_PASSWORD`, `DEMO_CHILD_PASSWORD`, `DEMO_STAFF_PASSWORD` facultatif) :
+
+| Compte | Rôle |
+|---|---|
+| `admin@carenest.ma` | Administration |
+| `referent@carenest.ma` | Référent |
+| `parent@carenest.ma` | Parent (2 enfants avec consentement) |
+| `yassine@carenest.ma`, `amina@carenest.ma`, `omar@carenest.ma`, `sara@carenest.ma`, `karim@carenest.ma` | Élèves |
+
+Le contrôle de rôle et le cloisonnement par école sont faits côté serveur (middleware `role:` + vérification dans chaque composant). Un délégué temporaire (`referent_delegations`) n'accède qu'aux alertes actives.
 
 L'analyse émotionnelle (zone green / yellow / orange / red) est faite **à la clôture de chaque session** (et en temps réel dès qu'un signal orange/rouge apparaît). Une zone `orange` ou `red` génère automatiquement une **alerte** côté admin.
 

@@ -15,16 +15,23 @@ class MigrationsReplayTest extends TestCase
 {
     use DatabaseMigrations;
 
-    public function test_lot0_migrations_can_be_rolled_back_and_replayed(): void
+    public function test_lot0_and_lot1_migrations_can_be_rolled_back_and_replayed(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 3, '--force' => true])->assertExitCode(0);
+        // 3 migrations lot 0 + 3 migrations lot 1 (000010, 000011, 000012).
+        $this->artisan('migrate:rollback', ['--step' => 6, '--force' => true])->assertExitCode(0);
         $this->assertFalse(Schema::hasColumn('children', 'birth_date'));
+        $this->assertFalse(Schema::hasTable('audit_logs'));
+        $this->assertFalse(Schema::hasColumn('admin_notes', 'referent_id'));
+        $this->assertFalse(Schema::hasColumn('users', 'deactivated_at'));
 
         $this->artisan('migrate', ['--force' => true])->assertExitCode(0);
 
         $this->assertTrue(Schema::hasColumn('children', 'birth_date'));
         $this->assertTrue(Schema::hasColumn('alerts', 'adjudication'));
         $this->assertTrue(Schema::hasColumn('chat_sessions', 'care_memory'));
+        $this->assertTrue(Schema::hasTable('audit_logs'));
+        $this->assertTrue(Schema::hasColumn('alerts', 'reopened_from_id'));
+        $this->assertTrue(Schema::hasColumn('school_settings', 'notification_channels'));
     }
 
     public function test_recreated_tables_keep_canonical_index_names(): void

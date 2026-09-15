@@ -14,7 +14,8 @@ new #[Layout('layouts.guest')] class extends Component
         $this->validate();
         $this->form->authenticate();
         Session::regenerate();
-        $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+        // Lot 1 — redirection selon le rôle : admin → /dashboard, referent → /dashboard-referent, parent → /parent.
+        $this->redirectIntended(default: auth()->user()->homePath(), navigate: true);
     }
 }; ?>
 
@@ -86,8 +87,8 @@ new #[Layout('layouts.guest')] class extends Component
 
     <div class="mt-8 pt-6 border-t border-stone-100">
         <div class="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3">
-            <div class="eyebrow mb-1">Compte démo</div>
-            <div class="text-xs text-stone-600 font-mono">admin@carenest.ma · admin123</div>
+            <div class="eyebrow mb-1">Comptes démo</div>
+            <div class="text-xs text-stone-600 font-mono">admin@carenest.ma · referent@carenest.ma · parent@carenest.ma</div>
         </div>
         <div class="mt-5 text-center text-xs text-stone-400">
             Vous êtes un élève&nbsp;?

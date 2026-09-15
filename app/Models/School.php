@@ -38,4 +38,22 @@ class School extends Model
     {
         return $this->hasMany(Alert::class);
     }
+
+    // ── Lot 1 (MVP v3) ─────────────────────────────────────────────────
+
+    /** Référent titulaire de l'école (school_user.role = referent, compte actif). */
+    public function referent(): ?User
+    {
+        return $this->users()->wherePivot('role', 'referent')->where('users.role', 'referent')->first();
+    }
+
+    public function delegations(): HasMany
+    {
+        return $this->hasMany(ReferentDelegation::class);
+    }
+
+    public function parentThreads(): HasMany
+    {
+        return $this->hasMany(ParentThread::class);
+    }
 }

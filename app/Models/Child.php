@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -86,5 +88,54 @@ class Child extends Authenticatable
     public function adminNotes(): HasMany
     {
         return $this->hasMany(AdminNote::class);
+    }
+
+    // ── Lot 1 (MVP v3) ─────────────────────────────────────────────────
+
+    /** Parents rattachés via parent_child (avec consentement). */
+    public function parents(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'parent_child', 'child_id', 'parent_id')
+                    ->using(ParentChild::class)
+                    ->withPivot(['relation', 'consent_given', 'consent_text', 'consent_timestamp', 'consent_ip', 'consent_withdrawn_at'])
+                    ->withTimestamps();
+    }
+
+    /** Parents dont le consentement est actif (donné et non retiré). */
+    public function consentingParents(): BelongsToMany
+    {
+        return $this->parents()
+            ->wherePivot('consent_given', true)
+            ->wherePivotNull('consent_withdrawn_at');
+    }
+
+    public function hasActiveConsent(): bool
+    {
+        return $this->consentingParents()->exists();
+    }
+
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(FollowUp::class);
+    }
+
+    public function latestFollowUp(): HasOne
+    {
+        return $this->hasOne(FollowUp::class)->latestOfMany();
+    }
+
+    public function parentThreads(): HasMany
+    {
+        return $this->hasMany(ParentThread::class);
+    }
+
+    public function syntheses(): HasMany
+    {
+        return $this->hasMany(ParentSynthesis::class);
+    }
+
+    public function isDeactivated(): bool
+    {
+        return $this->deactivated_at !== null;
     }
 }

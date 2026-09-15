@@ -17,6 +17,7 @@ class SchoolSetting extends Model
         'session_max_minutes',
         'referent_phone',
         'admin_phone',
+        'notification_channels',
     ];
 
     protected function casts(): array
@@ -26,6 +27,7 @@ class SchoolSetting extends Model
             'alert_threshold'     => 'integer',
             'daily_token_cap'     => 'integer',
             'session_max_minutes' => 'integer',
+            'notification_channels' => 'array',
         ];
     }
 
