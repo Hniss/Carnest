@@ -1,13 +1,18 @@
 <?php
 namespace App\Livewire\Child;
 
+use App\Jobs\AdjudicateSignal;
 use App\Models\Alert;
 use App\Models\ChatSession;
+use App\Models\Child;
 use App\Services\AIService;
+use App\Services\AlertPager;
 use App\Services\ChildContextBuilder;
 use App\Services\CrisisDetector;
 use App\Services\GeminiService;
+use App\Services\Notifier;
 use App\Services\SessionCloser;
+use App\Services\TokenBudget;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
@@ -22,6 +27,16 @@ class ChatInterface extends Component
 
     /** Message doux servi au-delà du débit autorisé (aucun appel à l'IA). */
     public const RATE_LIMIT_MESSAGE = "Je suis là, prends une petite pause et on continue dans un instant.";
+
+    /**
+     * D8 (v3) — messages de clôture chaleureuse quand le plafond journalier est
+     * atteint en zone verte sans alerte. Aucune mention de quota, de limite ni de tokens.
+     */
+    public const CAP_CLOSING_MESSAGES = [
+        "On a bien parlé aujourd'hui. On se reparle demain ? Je serai là.",
+        "Merci pour ce moment ensemble. On continue demain, je t'attends.",
+        "C'était chouette de discuter avec toi. À demain, prends soin de toi.",
+    ];
 
     public array $messages = [];
     public string $input = '';
@@ -142,7 +157,13 @@ class ChatInterface extends Component
 
         $aiResult = null;
         try {
-            $aiResult = app(AIService::class)->chat($aiMessages, $child->age, $child->gender ?? null, $this->childContext);
+            $aiResult = app(AIService::class)->chat(
+                $aiMessages,
+                $child->age,
+                $child->gender ?? null,
+                $this->childContext,
+                ['hors_horaires_scolaires' => $this->isOutOfSchoolHours($child)],
+            );
         } catch (\Throwable $e) {
             Log::error('Chat AI failure', [
                 'child_id' => $child->id,
@@ -219,8 +240,96 @@ class ChatInterface extends Component
             }
         }
 
-        // 5) Création d'alerte temps réel (P9, P11, P13).
-        $this->maybeCreateAlert($child);
+        // 5) Création d'alerte temps réel (P9, P11, P13) + paging + adjudication après réponse (lot 2).
+        $this->maybeCreateAlert($child, $aiMessages);
+
+        // 6) D8 — plafond journalier (jamais bloquant hors zone verte sans alerte).
+        $this->enforceDailyCap($child);
+    }
+
+    /**
+     * D5 (lot 2) — vrai quand l'école est fermée (week-end ou hors plage horaire).
+     * Calculé côté serveur, transmis au prompt comme simple indicateur.
+     */
+    private function isOutOfSchoolHours(Child $child): bool
+    {
+        $setting = $child->school?->setting;
+        $start = substr((string) ($setting?->school_hours_start ?? '08:00'), 0, 5);
+        $end   = substr((string) ($setting?->school_hours_end ?? '17:00'), 0, 5);
+        $now   = now();
+
+        if (! $now->isWeekday()) {
+            return true;
+        }
+        $hm = $now->format('H:i');
+
+        return $hm < $start || $hm >= $end;
+    }
+
+    /**
+     * D8 (lot 2) — plafond de tokens par enfant et par jour.
+     *  - zone verte ET aucune alerte sur la session → clôture chaleureuse (SessionCloser).
+     *  - zone jaune / orange / rouge, ou alerte en cours → aucune limite.
+     *  - premier dépassement du jour → notification interne au référent, une fois par jour.
+     * L'enfant ne voit jamais de mention de quota, de limite, de tokens ni d'alerte.
+     */
+    private function enforceDailyCap(Child $child): void
+    {
+        if (! $this->sessionId || $this->sessionClosed) return;
+
+        try {
+            if (! app(TokenBudget::class)->isExceeded($child)) return;
+
+            $this->notifyHighUsageOnce($child);
+
+            $alertOnSession = $this->alertCreated || Alert::where('session_id', $this->sessionId)->exists();
+            if ($this->currentZone !== 'green' || $alertOnSession) return;
+
+            $this->messages[] = [
+                'role'    => 'assistant',
+                'content' => self::CAP_CLOSING_MESSAGES[array_rand(self::CAP_CLOSING_MESSAGES)],
+            ];
+
+            $session = ChatSession::find($this->sessionId);
+            if ($session) {
+                $result = app(SessionCloser::class)->close(
+                    $session,
+                    collect($this->messages)->slice(1)->values()->toArray(),
+                    $child,
+                    $this->currentZone,
+                    $this->currentAlertType,
+                    $this->alertCreated,
+                );
+                $this->alertCreated = $result['alert_created'];
+            }
+            $this->sessionClosed = true;
+            $this->dispatch('scroll-bottom');
+        } catch (\Throwable $e) {
+            Log::error('Daily cap handling failed', ['session' => $this->sessionId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** Notification « usage inhabituellement élevé » au référent, une seule fois par jour et par enfant. */
+    private function notifyHighUsageOnce(Child $child): void
+    {
+        $fresh = $child->fresh();
+        if ($fresh?->high_usage_notified_on !== null && $fresh->high_usage_notified_on->isSameDay(now())) {
+            return;
+        }
+
+        $referent = $child->school?->referent();
+        if ($referent) {
+            $first = trim(explode(' ', trim((string) $child->name))[0]) ?: 'Un élève';
+            app(Notifier::class)->notify(
+                $referent,
+                'usage_eleve',
+                'Usage inhabituellement élevé',
+                "{$first} a dépassé le volume d'échanges habituel aujourd'hui, à surveiller.",
+                '/dashboard-referent/eleves/' . $child->id,
+            );
+        }
+
+        Child::whereKey($child->id)->update(['high_usage_notified_on' => now()->toDateString()]);
     }
 
     public function endSession(): void
@@ -258,7 +367,7 @@ class ChatInterface extends Component
      * Idempotence : la propriété Livewire $alertCreated est sérialisée côté client donc
      * potentiellement manipulable. On double-checke côté serveur via une requête DB.
      */
-    private function maybeCreateAlert($child): void
+    private function maybeCreateAlert($child, array $aiMessages = []): void
     {
         if ($this->alertCreated || ! $this->sessionId) return;
         if (! in_array($this->currentZone, ['orange', 'red'], true)) return;
@@ -280,7 +389,7 @@ class ChatInterface extends Component
             // D10 (v3) — summary = résumé IA de la session s'il existe déjà (chiffré au
             // repos), version de prompt et modèle pour la traçabilité de l'alerte.
             $session = ChatSession::find($this->sessionId);
-            Alert::create([
+            $alert = Alert::create([
                 'session_id'     => $this->sessionId,
                 'child_id'       => $child->id,
                 'school_id'      => $child->school_id,
@@ -291,6 +400,19 @@ class ChatInterface extends Component
                 'model'          => $session?->model,
             ]);
             $this->alertCreated = true;
+
+            // Lot 2 §2 — paging immédiat (référent, administration si vital).
+            try {
+                app(AlertPager::class)->page($alert);
+            } catch (\Throwable $e) {
+                Log::error('Alert paging failed', ['alert' => $alert->id, 'error' => $e->getMessage()]);
+            }
+
+            // Lot 2 §1 — double vérification APRÈS la réponse à l'enfant, historique en
+            // mémoire uniquement (jamais sérialisé dans une file ni en base).
+            if ($aiMessages !== []) {
+                AdjudicateSignal::dispatchAfterResponse($alert->id, $aiMessages, $this->currentZone, $this->currentAlertType);
+            }
         } catch (\Throwable $e) {
             Log::error('Realtime alert creation failed', [
                 'session' => $this->sessionId,

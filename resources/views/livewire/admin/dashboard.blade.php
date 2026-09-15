@@ -40,16 +40,21 @@
             </div>
             <div>
                 <h2 class="font-semibold text-stone-900">Urgences sans accusé</h2>
-                <p class="text-xs text-stone-500 mt-0.5">Signaux vitaux sans prise de connaissance du référent depuis plus de {{ \App\Livewire\Admin\Dashboard::VITAL_ACK_MINUTES }} minutes ouvrées. Chaque affichage est tracé.</p>
+                <p class="text-xs text-stone-500 mt-0.5">Signaux vitaux sans prise de connaissance du référent depuis plus de {{ \App\Livewire\Admin\Dashboard::VITAL_ACK_MINUTES }} minutes ouvrées, et alertes dont l'escalade est épuisée. Chaque affichage est tracé.</p>
             </div>
         </div>
         <div class="divide-y divide-stone-100">
             @forelse ($vital as $a)
                 <div class="px-6 py-3.5 flex items-center gap-4">
-                    <span class="badge badge-danger shrink-0">Vital</span>
+                    <span class="badge badge-danger shrink-0">{{ in_array($a->type, AlertType::vitalValues(), true) ? 'Vital' : 'Sans accusé' }}</span>
                     <div class="flex-1 min-w-0">
                         <div class="font-medium text-stone-900 truncate">{{ $a->child?->name }}</div>
-                        <div class="text-xs text-stone-500">{{ AlertType::labelFor($a->type) }} · signalé {{ $a->created_at->diffForHumans() }}</div>
+                        <div class="text-xs text-stone-500">
+                            {{ AlertType::labelFor($a->type) }} · signalé {{ $a->created_at->diffForHumans() }}
+                            @if ($a->escalation_exhausted_at)
+                                · <span class="text-red-700 font-medium">Escalade épuisée {{ $a->escalation_exhausted_at->diffForHumans() }}</span>
+                            @endif
+                        </div>
                     </div>
                 </div>
             @empty

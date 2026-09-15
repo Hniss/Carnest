@@ -26,7 +26,16 @@ interface AIService
      * @param ?string $childGender 'm' | 'f' | 'x' | null — pour accord de genre dans le prompt (P8 V4)
      * @param ?string $childContext Bloc mémoire inter-sessions injecté dans le prompt système
      *                              (#7 V5 — signaux récurrents, tendance, résumés). null = pas de mémoire.
+     * @param array{hors_horaires_scolaires?: bool} $flags Indicateurs calculés côté serveur (D5 : école fermée).
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, tokens:int, model:string}
      */
-    public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null): array;
+    public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null, array $flags = []): array;
+
+    /**
+     * Lot 2 §5 — mémoire de Care : 2 phrases max, sujets neutres et positifs uniquement
+     * (jamais un signal, une émotion négative ni un nom de tiers). Distincte du résumé clinique.
+     *
+     * @return array{memory:string, tokens:int, model:string} memory = '' si aucun sujet neutre.
+     */
+    public function generateCareMemory(array $messages, int $childAge): array;
 }

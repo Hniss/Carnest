@@ -90,18 +90,8 @@ class AlertTreatment extends Component
 
     public function acknowledge(): void
     {
-        DB::transaction(function () {
-            $notification = AlertNotification::firstOrCreate(
-                ['alert_id' => $this->alert->id, 'recipient_id' => Auth::id(), 'channel' => 'app'],
-                ['sent_at' => now(), 'escalation_step' => 0]
-            );
-            if ($notification->acked_at === null) {
-                $notification->update(['acked_at' => now()]);
-            }
-            if ($this->alert->status === 'unread') {
-                $this->alert->update(['status' => 'read']);
-            }
-        });
+        // Lot 2 — accusé mutualisé avec le pager (stoppe l'escalade).
+        app(\App\Services\AlertPager::class)->ack($this->alert, Auth::user());
         Audit::log('referent.alert.ack', $this->alert);
         $this->alert->refresh();
         $this->flash = 'Prise de connaissance enregistrée.';

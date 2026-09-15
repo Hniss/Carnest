@@ -129,6 +129,40 @@ Les URL de base sont configurables (résidence des données) : `OPENAI_BASE_URL`
 
 Pour ajouter un provider, implémenter `App\Services\AIService` et binder dans `AppServiceProvider::register()`.
 
+**Double vérification (lot 2)** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
+
+**Versions de prompt** — `GeminiService::PROMPT_VERSION` + `PROMPT_HASH` (SHA-256). Toute modification d'un texte de prompt exige d'incrémenter la version et de mettre à jour le hash (le test `PromptVersionTest` le rappelle). La table `prompt_versions` est alimentée au démarrage.
+
+---
+
+## Paging, escalade et planificateur (lot 2)
+
+Les alertes de niveau élevé / critique (ou de type vital) déclenchent une notification interne + un e-mail au référent (texte sans donnée nominative), un SMS pour les signaux vitaux (pilote `log`, interface `App\Contracts\SmsSender` prête pour un fournisseur réel) et, pour les signaux vitaux, une notification simultanée à l'administration.
+
+Sans accusé de réception du référent, l'escalade suit ces paliers, comptés en **heures ouvrées** de l'école (lundi-vendredi, `Paramètres`) pour les alertes non vitales et **en continu** pour les vitales :
+
+| Palier | Action |
+|---|---|
+| 5 min | relance référent (app + e-mail + SMS) et délégué actif |
+| 15 min | administration prévenue (nom + type, audité) + notification technique H&Y (`CARENEST_OPS_EMAIL`, sans nom) |
+| 60 min | `alerts.escalation_exhausted_at` posé, visible dans « Urgences sans accusé » |
+
+La commande `php artisan carenest:escalate-alerts` est planifiée **chaque minute** dans `routes/console.php` et écrit un battement dans `pager_heartbeats`. Le planificateur doit tourner :
+
+```bash
+# En local
+php artisan schedule:work
+
+# En production (cron système)
+* * * * * cd /chemin/vers/carenest && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Contrôle externe : `GET /up/pager` répond `ok` si un battement date de moins de 3 minutes, `stale` sinon.
+
+Variables d'environnement à renseigner (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `CARENEST_OPS_EMAIL`, `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM_ADDRESS` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés).
+
+Plafond journalier de tokens par élève (D8) : `Paramètres` de l'administration, `0` = désactivé. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Au premier dépassement du jour, le référent reçoit une notification « Usage inhabituellement élevé ».
+
 ---
 
 ## Architecture en bref

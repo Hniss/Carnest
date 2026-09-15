@@ -117,7 +117,7 @@ class ChildContextBuilderTest extends TestCase
 
         $block = $this->builder->build($child, $this->now);
 
-        $this->assertStringContainsString('isolement (2×)', $block);
+        $this->assertStringContainsString("sois particulièrement attentive au thème de l'isolement", $block);
         $this->assertStringContainsString('RAPPEL_EXPLICITE_AUTORISE : oui', $block);
     }
 

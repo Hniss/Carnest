@@ -72,11 +72,12 @@ class ChildContextBuilder
             ->countBy('type')
             ->sortDesc();
 
+        // Lot 2 §5 — les signaux récurrents deviennent une consigne de POSTURE, sans détail ni compte.
         $recurringLines = [];
         $hasRecurringSeriousSignal = false;
         foreach ($alertCounts as $type => $count) {
             if ($count >= self::RECURRING_THRESHOLD) {
-                $recurringLines[] = "{$type} ({$count}×)";
+                $recurringLines[] = 'sois particulièrement attentive au thème ' . $this->themeLabel((string) $type);
                 if (in_array($type, AlertType::seriousValues(), true)) {
                     $hasRecurringSeriousSignal = true;
                 }
@@ -90,15 +91,16 @@ class ChildContextBuilder
         }
         $trendLabel = $this->trendLabel($trend->shortTermTrend->direction);
 
-        // Résumés récents (jamais répétés verbatim — pour information de Care).
+        // Lot 2 §5 — mémoire de Care : sujets NEUTRES uniquement (care_memory). Le résumé
+        // clinique (ai_summary) n'entre plus dans le prompt de Care : il sert au référent.
         $summaries = ChatSession::query()
             ->where('child_id', $child->id)
             ->whereNotNull('ended_at')
-            ->whereNotNull('ai_summary')
+            ->whereNotNull('care_memory')
             ->where('ended_at', '>=', $from)
             ->latest('ended_at')
             ->limit(self::RECENT_SUMMARIES)
-            ->pluck('ai_summary')
+            ->pluck('care_memory')
             ->all();
 
         return $this->render(
@@ -109,6 +111,21 @@ class ChildContextBuilder
             summaries: $summaries,
             allowExplicitRecall: $hasRecurringSeriousSignal,
         );
+    }
+
+    /** Libellé de thème pour la consigne de posture (jamais le code technique brut). */
+    private function themeLabel(string $type): string
+    {
+        return match ($type) {
+            'harcelement'        => 'du harcèlement',
+            'detresse'           => 'de la détresse',
+            'pensees_negatives'  => 'des pensées négatives',
+            'danger'             => 'du danger',
+            'isolement'          => "de l'isolement",
+            'stress'             => 'du stress',
+            'humiliation_adulte' => "de l'humiliation par un adulte",
+            default              => 'de ' . $type,
+        };
     }
 
     private function trendLabel(string $direction): string
@@ -135,21 +152,23 @@ class ChildContextBuilder
     ): string {
         $recurring = $recurringLines === []
             ? 'aucun signal récurrent marquant'
-            : implode(', ', $recurringLines);
+            : implode(' ; ', $recurringLines);
 
         // D10 (v3) — pas de prénom ni de classe : le bloc est envoyé au fournisseur d'IA.
         $lines = [
             'MÉMOIRE — CE QUE TU SAIS DÉJÀ DE CET ENFANT',
             "Sessions précédentes : {$closedCount}",
-            "Signaux récurrents (30 derniers jours) : {$recurring}",
+            "Posture (30 derniers jours) : {$recurring}",
             "Tendance récente : {$trendLabel}",
         ];
 
         if ($summaries !== []) {
-            $lines[] = 'Résumés récents (pour TON information uniquement — NE répète JAMAIS ces phrases mot pour mot à l\'enfant) :';
+            $lines[] = 'Sujets neutres dont tu peux te souvenir (activités, sport, matières, animaux, projets). Ne cite JAMAIS une donnée qui ne figure pas ici, ne récite pas ces phrases mot pour mot :';
             foreach ($summaries as $summary) {
                 $lines[] = '- ' . trim((string) $summary);
             }
+        } else {
+            $lines[] = 'Aucun sujet neutre mémorisé : ne cite jamais un souvenir précis de conversation.';
         }
 
         $lines[] = 'RAPPEL_EXPLICITE_AUTORISE : ' . ($allowExplicitRecall ? 'oui' : 'non');

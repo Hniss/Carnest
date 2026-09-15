@@ -40,7 +40,7 @@ class GeminiServiceV3Test extends TestCase
 
     public function test_prompt_version_constant_is_v3(): void
     {
-        $this->assertSame('v3.0', GeminiService::PROMPT_VERSION);
+        $this->assertStringStartsWith('v3.', GeminiService::PROMPT_VERSION);
     }
 
     public function test_chat_returns_tokens_and_model(): void

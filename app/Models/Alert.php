@@ -15,7 +15,7 @@ class Alert extends Model
         'session_id', 'child_id', 'school_id',
         'type', 'level', 'status', 'notified_at',
         'summary', 'signals', 'prompt_version', 'model', 'adjudication',
-        'reopened_from_id',
+        'reopened_from_id', 'escalation_exhausted_at',
     ];
 
     /**
@@ -25,6 +25,7 @@ class Alert extends Model
     {
         return [
             'notified_at' => 'datetime',
+            'escalation_exhausted_at' => 'datetime',
             'summary'     => 'encrypted',
             'signals'     => 'array',
         ];

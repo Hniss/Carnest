@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\AdjudicateSignal;
 use App\Jobs\ProcessSessionClosure;
 use App\Models\Alert;
 use App\Models\ChatSession;
@@ -34,6 +35,7 @@ class SessionCloser
         private readonly AIService $ai,
         private readonly CrisisDetector $detector,
         private readonly AlertLevelResolver $levelResolver,
+        private readonly AlertPager $pager,
     ) {}
 
     /**
@@ -72,7 +74,7 @@ class SessionCloser
                 'ai_summary'     => $session->ai_summary
                     ?? 'Session interrompue sans message exprimé (fenêtre fermée).',
             ]);
-            $alertCreated = $this->maybeCreateAlert($session, $child, $zone, $currentAlertType, [], $alertAlreadyCreated);
+            $alertCreated = $this->maybeCreateAlert($session, $child, $zone, $currentAlertType, [], $alertAlreadyCreated, []);
             ProcessSessionClosure::dispatchSync($session);
 
             return ['zone' => $zone, 'alert_created' => $alertCreated];
@@ -95,6 +97,9 @@ class SessionCloser
                 'model'          => $analysis['model'] ?? $session->model,
             ]);
 
+            // Lot 2 §5 — mémoire de Care (sujets neutres), génération distincte du résumé clinique.
+            $this->storeCareMemory($session, $messages, $child);
+
             $alertCreated = $this->maybeCreateAlert(
                 $session,
                 $child,
@@ -102,6 +107,7 @@ class SessionCloser
                 $finalAlertType,
                 $userContents,
                 $alertAlreadyCreated,
+                $messages,
             );
 
             ProcessSessionClosure::dispatchSync($session);
@@ -127,6 +133,7 @@ class SessionCloser
                 $currentAlertType,
                 $userContents,
                 $alertAlreadyCreated,
+                $messages,
             );
 
             ProcessSessionClosure::dispatchSync($session);
@@ -136,9 +143,31 @@ class SessionCloser
     }
 
     /**
+     * Lot 2 §5 — génère et persiste `care_memory` (2 phrases neutres max). Jamais bloquant :
+     * un échec laisse la colonne inchangée et la clôture se poursuit.
+     *
+     * @param array<int,array{role:string,content:string}> $messages
+     */
+    private function storeCareMemory(ChatSession $session, array $messages, Child $child): void
+    {
+        try {
+            $memory = $this->ai->generateCareMemory($messages, $child->age);
+            $text = trim((string) ($memory['memory'] ?? ''));
+            $session->update([
+                'care_memory' => $text !== '' ? mb_substr($text, 0, 500) : null,
+                'tokens_used' => (int) $session->tokens_used + (int) ($memory['tokens'] ?? 0),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Care memory generation failed', ['session' => $session->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Crée une alerte de clôture si la zone le justifie et qu'aucune n'existe déjà.
+     * Lot 2 : paging immédiat + adjudication après réponse (historique en mémoire).
      *
      * @param array<int,string> $userContents
+     * @param array<int,array{role:string,content:string}> $messages
      */
     private function maybeCreateAlert(
         ChatSession $session,
@@ -147,6 +176,7 @@ class SessionCloser
         ?string $alertType,
         array $userContents,
         bool $alertAlreadyCreated,
+        array $messages = [],
     ): bool {
         if (! in_array($zone, ['orange', 'red'], true)) {
             return false;
@@ -162,7 +192,7 @@ class SessionCloser
 
         // D10 (v3) — summary = résumé IA de la session (chiffré au repos) + traçabilité prompt/modèle.
         $session->refresh();
-        Alert::create([
+        $alert = Alert::create([
             'session_id'     => $session->id,
             'child_id'       => $child->id,
             'school_id'      => $child->school_id,
@@ -172,6 +202,16 @@ class SessionCloser
             'prompt_version' => $session->prompt_version ?? GeminiService::PROMPT_VERSION,
             'model'          => $session->model,
         ]);
+
+        try {
+            $this->pager->page($alert);
+        } catch (\Throwable $e) {
+            Log::error('Alert paging failed', ['alert' => $alert->id, 'error' => $e->getMessage()]);
+        }
+
+        if ($userContents !== [] && $messages !== []) {
+            AdjudicateSignal::dispatchAfterResponse($alert->id, $messages, $zone, $alertType);
+        }
 
         return true;
     }

@@ -70,8 +70,8 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="dailyTokenCap" class="label">Plafond quotidien de tokens par élève</label>
-                    <input id="dailyTokenCap" type="number" min="1000" max="200000" step="500" wire:model="dailyTokenCap" class="input">
-                    <p class="text-xs text-stone-500 mt-1">Jamais bloquant : en zone verte, Care clôt chaleureusement ; aucun plafond en cas de signal.</p>
+                    <input id="dailyTokenCap" type="number" min="0" max="200000" step="500" wire:model="dailyTokenCap" class="input">
+                    <p class="text-xs text-stone-500 mt-1">Jamais bloquant : en zone verte, Care clôt chaleureusement ; aucun plafond en cas de signal. 0 = désactivé.</p>
                     @error('dailyTokenCap') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
                 </div>
                 <div>

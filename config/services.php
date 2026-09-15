@@ -48,6 +48,15 @@ return [
         'openai_base_url'    => env('OPENAI_BASE_URL', 'https://eu.api.openai.com/v1'),
         'anthropic_base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
         'gemini_base_url'    => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
+
+        // Lot 2 §1 — second fournisseur pour la double vérification (adjudicateur), sans persona.
+        'adjudicator_provider' => env('AI_ADJUDICATOR_PROVIDER', 'gemini'),
+        'adjudicator_model'    => env('AI_ADJUDICATOR_MODEL'),
+    ],
+
+    // Lot 2 §2 — notification technique H&Y à l'étape 2 d'escalade (sans donnée nominative).
+    'carenest' => [
+        'ops_email' => env('CARENEST_OPS_EMAIL'),
     ],
 
 ];

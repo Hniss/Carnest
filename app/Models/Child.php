@@ -24,7 +24,7 @@ class Child extends Authenticatable
     protected $fillable = [
         'school_id', 'name', 'email', 'password',
         'age', 'birth_date', 'age_group', 'classe', 'gender',
-        'score_enfant', 'status', 'last_session_at', 'deactivated_at',
+        'score_enfant', 'status', 'last_session_at', 'deactivated_at', 'high_usage_notified_on',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -41,6 +41,7 @@ class Child extends Authenticatable
             'birth_date'      => 'date',
             'last_session_at' => 'datetime',
             'deactivated_at'  => 'datetime',
+            'high_usage_notified_on' => 'date',
         ];
     }
 

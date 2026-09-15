@@ -18,3 +18,11 @@ Schedule::call(fn () => app(\App\Jobs\CloseIdleSessions::class)->handle())
     ->everyTwoMinutes()
     ->name('close-idle-chat-sessions')
     ->withoutOverlapping();
+
+/**
+ * Lot 2 (MVP v3) — escalade des alertes sans accusé (5 / 15 / 60 minutes
+ * ouvrées, vitales en continu) + battement `pager_heartbeats`, chaque minute.
+ */
+Schedule::command('carenest:escalate-alerts')
+    ->everyMinute()
+    ->withoutOverlapping();

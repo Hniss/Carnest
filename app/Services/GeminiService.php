@@ -14,7 +14,25 @@ class GeminiService implements AIService
      * Version du prompt système (D8 / D10) — tracée sur chaque session et chaque alerte.
      * À incrémenter à chaque modification de SYSTEM_TEMPLATE / ANALYSIS_PROMPT.
      */
-    public const PROMPT_VERSION = 'v3.0';
+    public const PROMPT_VERSION = 'v3.1';
+
+    /**
+     * Lot 2 §6 — empreinte SHA-256 de l'ensemble des textes de prompt (système, mémoire,
+     * hors horaires, analyse, mémoire de Care). Un test dédié compare cette constante à
+     * systemPromptHash() : si le prompt change sans incrément de PROMPT_VERSION, il échoue.
+     */
+    public const PROMPT_HASH = 'a095baf41438faba6c006552baefa54a7e5a6af004927df250b4275d1871360f';
+
+    public static function systemPromptHash(): string
+    {
+        return hash('sha256', implode("\n---\n", [
+            self::SYSTEM_TEMPLATE,
+            self::MEMORY_USAGE_RULES,
+            self::OUT_OF_HOURS_RULES,
+            self::ANALYSIS_PROMPT,
+            self::CARE_MEMORY_PROMPT,
+        ]));
+    }
 
     /** D6 — endpoint configurable (GEMINI_BASE_URL) ; défaut = endpoint OpenAI-compatible de Google. */
     protected function baseUrl(): string
@@ -175,6 +193,15 @@ Ordre OBLIGATOIRE, dans cet ordre :
 2. SEULEMENT si l'enfant dit qu'il ne peut pas ou ne veut pas parler à un adulte proche, propose le 2511 : « Il existe aussi un numéro gratuit au Maroc, le 2511, où des personnes sont là pour aider les enfants. »
 Ne propose JAMAIS de numéro étranger, ne donne JAMAIS de conseil médical, et ne dis JAMAIS qu'une alerte est envoyée ou qu'un adulte est prévenu automatiquement.
 
+%s
+
+PERSONNALITÉ DE CARE — RÈGLES FIXES
+- Tu n'as PAS de biographie : ne dis jamais « quand j'étais petite », « moi aussi à ton âge », ni aucun souvenir personnel. Seules des anecdotes universelles (ce qui arrive à beaucoup d'enfants) sont permises.
+- Tu n'initie jamais un sujet sensible (difficulté, conflit, émotion négative, personne précise). Tu ne relances de toi-même que sur un sujet NEUTRE mémorisé (activité, sport, matière, animal, projet).
+- Tu encourages régulièrement l'enfant à parler à un adulte de confiance, avec douceur et sans insistance lourde.
+- Tu ne promets jamais le secret et tu ne dis jamais qu'une alerte part ou qu'un adulte est prévenu.
+- Aucune mécanique de récompense liée à la fréquence des visites : pas de « bravo d'être revenu tous les jours », pas de points, pas de série à tenir.
+
 HUMILIATION PAR UN ADULTE DE L'ÉCOLE — RÈGLE SPÉCIFIQUE
 Si l'enfant rapporte qu'un adulte de l'école (enseignant, maîtresse, maître, directeur, surveillant) l'humilie, l'insulte, le rabaisse, lui crie dessus, ou le traite de mots méchants (« idiot », « nul », « bête », « imbécile ») :
 - Classe l'échange en orange MINIMUM, avec ALERT_TYPE: humiliation_adulte.
@@ -215,6 +242,29 @@ Tu disposes ci-dessous d'informations issues des échanges précédents avec cet
 - Ne révèle jamais que ces informations viennent d'une « base de données » ou d'un « dossier ». Reste naturelle, comme quelqu'un qui se souvient.
 PROMPT;
 
+    /**
+     * Lot 2 §3 (D5) — injecté uniquement quand l'indicateur `hors_horaires_scolaires`
+     * est vrai. Ordre impératif : adulte de confiance proche d'abord, ressource
+     * externe (2511, ou 141 en danger physique immédiat) seulement en filet.
+     */
+    private const OUT_OF_HOURS_RULES = <<<'PROMPT'
+HORS HORAIRES SCOLAIRES — CONDUITE EN CAS DE SIGNAL VITAL
+L'école est fermée en ce moment : aucun adulte de l'école n'est joignable tout de suite.
+Si un signal vital apparaît (envie de disparaître, de se faire du mal, violence subie, danger) :
+1. Insiste D'ABORD pour que l'enfant parle MAINTENANT à un adulte de confiance proche de lui, physiquement présent ou joignable : un parent, un grand frère ou une grande sœur, un oncle ou une tante, un grand-parent, un voisin adulte de confiance. Aide-le à choisir cette personne et à faire le premier pas tout de suite.
+2. SEULEMENT si l'enfant dit qu'il ne peut pas ou ne veut pas parler à un adulte proche, propose le 2511 (ligne gratuite « Allô enfance en danger », Maroc). En cas de danger physique immédiat, propose le 141.
+Cet ordre est impératif : adulte proche d'abord, ressource externe en filet. Ne dis jamais qu'une alerte part ni qu'un adulte est prévenu automatiquement.
+PROMPT;
+
+    /** Lot 2 §5 — génération de la mémoire de Care (sujets neutres uniquement), distincte du résumé clinique. */
+    private const CARE_MEMORY_PROMPT = <<<'PROMPT'
+Tu prépares une note de mémoire pour Care, l'assistante d'écoute, afin qu'elle puisse relancer un enfant sur des sujets agréables lors d'une prochaine conversation.
+À partir de la conversation ci-dessous, écris au maximum 2 phrases courtes, en français, à la troisième personne, contenant UNIQUEMENT des sujets neutres et positifs : activités, sport, matières aimées, animaux, projets, loisirs.
+Règle absolue : n'écris rien qui concerne une difficulté, une émotion négative, un conflit ou une personne nommée. Aucun prénom, aucun nom, aucun signal de risque, aucune évaluation.
+Si aucun sujet neutre n'apparaît, réponds exactement : AUCUN
+Réponds par le texte seul, sans titre ni explication.
+PROMPT;
+
     private const ANALYSIS_PROMPT = <<<'PROMPT'
 Analyse l'ENSEMBLE de la conversation ci-dessus et produis :
 1. Un résumé bienveillant en 2-3 phrases (pour l'administrateur de l'école, jamais affiché à l'enfant). Mentionne le ressenti dominant et tout signal de risque éventuel.
@@ -235,9 +285,10 @@ PROMPT;
     /**
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool}
      */
-    public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null): array
+    public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null, array $flags = []): array
     {
-        $systemPrompt = $this->buildSystemPrompt($childAge, $childGender, $childContext);
+        $outOfHours = (bool) ($flags['hors_horaires_scolaires'] ?? false);
+        $systemPrompt = $this->buildSystemPrompt($childAge, $childGender, $childContext, $outOfHours);
         $response = $this->request($systemPrompt, $messages);
 
         $text = $response['choices'][0]['message']['content'] ?? '';
@@ -292,6 +343,47 @@ PROMPT;
         return $parsed;
     }
 
+    /**
+     * Lot 2 §5 — mémoire de Care : sujets neutres uniquement (2 phrases max), générée
+     * séparément du résumé clinique. Chaîne vide si aucun sujet neutre.
+     *
+     * @return array{memory:string, tokens:int, model:string}
+     */
+    public function generateCareMemory(array $messages, int $childAge): array
+    {
+        $payload = array_merge(
+            [['role' => 'system', 'content' => self::CARE_MEMORY_PROMPT]],
+            $messages,
+            [['role' => 'user', 'content' => 'Écris maintenant la note de mémoire (2 phrases maximum, sujets neutres uniquement).']],
+        );
+
+        $result = $this->rawCompletion($payload, 0.3, 200);
+        $text = trim($result['text']);
+        if ($text === '' || strtoupper(rtrim($text, '.')) === 'AUCUN') {
+            $text = '';
+        }
+
+        return ['memory' => $text, 'tokens' => $result['tokens'], 'model' => $result['model']];
+    }
+
+    /**
+     * Lot 2 §1 — complétion brute (sans persona) : réutilisée par l'adjudicateur et la
+     * mémoire de Care. $messages contient déjà l'éventuel message système.
+     *
+     * @param array<int,array{role:string,content:string}> $messages
+     * @return array{text:string, tokens:int, model:string}
+     */
+    public function rawCompletion(array $messages, float $temperature, int $maxTokens): array
+    {
+        $response = $this->send($messages, $maxTokens, $temperature);
+
+        return [
+            'text'   => (string) ($response['choices'][0]['message']['content'] ?? ''),
+            'tokens' => $this->usageTokens($response),
+            'model'  => $this->responseModel($response),
+        ];
+    }
+
     /** D8 — total de tokens consommés (usage.total_tokens), 0 si absent. */
     private function usageTokens(array $response): int
     {
@@ -305,7 +397,7 @@ PROMPT;
         return is_string($model) && $model !== '' ? $model : $this->model;
     }
 
-    private function buildSystemPrompt(int $age, ?string $gender = null, ?string $childContext = null): string
+    private function buildSystemPrompt(int $age, ?string $gender = null, ?string $childContext = null, bool $outOfHours = false): string
     {
         $group = Child::ageGroupFor($age);
 
@@ -324,7 +416,9 @@ PROMPT;
             ? self::MEMORY_USAGE_RULES . "\n\n" . trim($childContext)
             : '';
 
-        return sprintf(self::SYSTEM_TEMPLATE, $age, $group, $langStyle, $genderBlock, $memorySection);
+        $outOfHoursSection = $outOfHours ? self::OUT_OF_HOURS_RULES : '';
+
+        return sprintf(self::SYSTEM_TEMPLATE, $age, $group, $langStyle, $genderBlock, $memorySection, $outOfHoursSection);
     }
 
     /**
@@ -357,14 +451,21 @@ PROMPT;
 
     private function request(string $systemPrompt, array $messages, int $maxTokens = 2048): array
     {
+        return $this->send(
+            array_merge([['role' => 'system', 'content' => $systemPrompt]], $messages),
+            $maxTokens,
+            0.7,
+        );
+    }
+
+    /** Appel Chat Completions avec relance sur 429 / 5xx. */
+    private function send(array $messages, int $maxTokens, float $temperature): array
+    {
         $payload = [
             'model'       => $this->model,
-            'messages'    => array_merge(
-                [['role' => 'system', 'content' => $systemPrompt]],
-                $messages
-            ),
+            'messages'    => $messages,
             'max_tokens'  => $maxTokens,
-            'temperature' => 0.7,
+            'temperature' => $temperature,
         ];
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {

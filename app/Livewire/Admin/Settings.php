@@ -32,7 +32,7 @@ class Settings extends Component
     #[Validate('required|date_format:H:i|after:schoolHoursStart')]
     public string $schoolHoursEnd = '17:00';
 
-    #[Validate('required|integer|min:1000|max:200000')]
+    #[Validate('required|integer|min:0|max:200000')]
     public int $dailyTokenCap = 10000;
 
     #[Validate('nullable|integer|min:5|max:180')]

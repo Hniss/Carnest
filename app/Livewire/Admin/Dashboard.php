@@ -107,12 +107,14 @@ class Dashboard extends Component
         // Urgences vitales sans accusé de réception du référent depuis > 60 min ouvrées.
         $hoursStart = (string) ($school?->setting?->school_hours_start ?? '08:00');
         $hoursEnd   = (string) ($school?->setting?->school_hours_end ?? '17:00');
+        // Lot 2 : les alertes dont l'escalade est épuisée (60 min sans accusé) y figurent aussi.
         $vital = $schoolId ? Alert::with('child:id,name')
             ->where('school_id', $schoolId)->where('status', '!=', 'resolved')
-            ->whereIn('type', AlertType::vitalValues())
+            ->where(fn ($q) => $q->whereIn('type', AlertType::vitalValues())->orWhereNotNull('escalation_exhausted_at'))
             ->whereDoesntHave('notifications', fn ($q) => $q->whereNotNull('acked_at'))
             ->orderBy('created_at')->get()
-            ->filter(fn ($a) => BusinessTime::minutesBetween($a->created_at, now(), $hoursStart, $hoursEnd) > self::VITAL_ACK_MINUTES)
+            ->filter(fn ($a) => $a->escalation_exhausted_at !== null
+                || BusinessTime::minutesBetween($a->created_at, now(), $hoursStart, $hoursEnd) > self::VITAL_ACK_MINUTES)
             ->values() : collect();
         foreach ($vital as $a) {
             Audit::log('admin.vital.view', $a);
