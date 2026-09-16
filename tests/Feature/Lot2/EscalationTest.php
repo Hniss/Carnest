@@ -64,6 +64,9 @@ class EscalationTest extends TestCase
 
     public function test_step1_after_5_business_minutes_relaunches_referent_and_delegate(): void
     {
+        // Lot 3 — l'horloge simulée est posée AVANT la délégation (ses dates dérivent de now()),
+        // sinon le test dépend du jour réel d'exécution.
+        Carbon::setTestNow('2026-09-14 10:00:00');
         $delegate = User::factory()->create(['role' => 'referent']);
         $this->makeActiveDelegation($this->school, $this->ref, $delegate);
         $alert = $this->pagedAlert('harcelement', 'high');

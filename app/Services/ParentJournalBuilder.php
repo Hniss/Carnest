@@ -33,7 +33,7 @@ class ParentJournalBuilder
             $label = match ($l->status) {
                 'qualifie'      => 'Le référent a évalué la situation',
                 'en_traitement' => 'L\'école a engagé une action',
-                'suivi'         => 'Un suivi a été planifié',
+                'suivi'         => 'Un accompagnement est en place',
                 'cloture'       => 'La situation a été clôturée par l\'école',
                 default         => null,
             };

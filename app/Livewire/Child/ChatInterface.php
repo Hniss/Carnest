@@ -495,16 +495,16 @@ class ChatInterface extends Component
      * P7 + P9 (V4) :
      *  - vocabulaire 100% Maroc (parent, enseignant, surveillant, responsable de l'école, directeur).
      *  - PAS de mention « infirmière » (vocabulaire non aligné avec le système marocain).
-     *  - 141 mentionné UNIQUEMENT pour 8-11 et 12-18, et avec formulation conditionnelle
+     *  - 2511 (Allô enfance en danger, D5) mentionné UNIQUEMENT pour 8-11 et 12-18, et avec formulation conditionnelle
      *    « si tu ne peux parler à personne tout de suite ». Pour 5-7 on évite le numéro
      *    (l'enfant ne sait pas appeler) et on oriente vers un adulte présent.
      */
     private function safetyMessage(string $ageGroup): string
     {
         return match ($ageGroup) {
-            '5-7'   => "Ce que tu me dis est très important. 💛 Tu n'es pas tout seul. Va voir un grand en qui tu as confiance (papa, maman, ton enseignant, le surveillant ou le directeur) et raconte-lui maintenant.",
-            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à rester seul avec ça. S'il te plaît, va parler maintenant à un adulte de confiance — un parent, un enseignant, le surveillant ou le responsable de l'école. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 141 au Maroc.",
-            default => "Ce que tu traverses est lourd, et tu n'es pas seul. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, le responsable de l'école ou le directeur. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 141 au Maroc. S'il te plaît, ne reste pas seul avec ça.",
+            '5-7'   => "Ce que tu me dis est très important. 💛 Il y a des grands pour t'aider. Va voir un grand en qui tu as confiance (papa, maman, ton enseignant, le surveillant ou le directeur) et raconte-lui maintenant.",
+            '8-11'  => "Ce que tu me dis compte beaucoup. Tu n'as pas à garder ça pour toi. S'il te plaît, va parler maintenant à un adulte de confiance — un parent, un enseignant, le surveillant ou le responsable de l'école. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 2511, le numéro « Allô enfance en danger » au Maroc.",
+            default => "Ce que tu traverses est lourd, et tu n'as pas à le porter sans aide. Le plus important maintenant, c'est d'en parler à un adulte de confiance — un parent, un enseignant, le responsable de l'école ou le directeur. Si tu ne peux parler à personne tout de suite, tu peux aussi appeler gratuitement le 2511, le numéro « Allô enfance en danger » au Maroc. S'il te plaît, ne garde pas ça pour toi.",
         };
     }
 

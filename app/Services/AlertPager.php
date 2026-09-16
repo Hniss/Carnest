@@ -14,6 +14,8 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\PendingMail;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -222,7 +224,7 @@ class AlertPager
         try {
             $mailable = new AlertPagedMail($alert->id, $step);
             $pending  = Mail::to($user->email);
-            config('queue.default') === 'sync' ? $pending->send($mailable) : $pending->queue($mailable);
+            $this->deliver($pending, $mailable);
         } catch (\Throwable $e) {
             Log::warning('E-mail de paging non envoyé', ['alert' => $alert->id, 'error' => $e->getMessage()]);
         }
@@ -238,11 +240,34 @@ class AlertPager
         try {
             $mailable = new OpsEscalationMail($alert->id, (int) $alert->school_id, $elapsed);
             $pending  = Mail::to($ops);
-            config('queue.default') === 'sync' ? $pending->send($mailable) : $pending->queue($mailable);
+            $this->deliver($pending, $mailable);
         } catch (\Throwable $e) {
             Log::warning('E-mail technique non envoyé', ['alert' => $alert->id, 'error' => $e->getMessage()]);
         }
         $this->journal($alert, 2, 'email', null);
+    }
+
+    /**
+     * Lot 3 — un e-mail d'alerte ne doit jamais dépendre d'un worker de file :
+     * avec `QUEUE_CONNECTION=database` et aucun `queue:work`, `queue()` laissait
+     * l'e-mail dormir dans la table `jobs` (constaté en recette). File `sync` →
+     * envoi immédiat ; sinon envoi juste après la réponse HTTP (ou en fin de
+     * commande), sans latence pour l'enfant et sans dépendre d'un worker.
+     */
+    private function deliver(PendingMail $pending, Mailable $mailable): void
+    {
+        if (config('queue.default') === 'sync') {
+            $pending->send($mailable);
+            return;
+        }
+
+        app()->terminating(function () use ($pending, $mailable) {
+            try {
+                $pending->send($mailable);
+            } catch (\Throwable $e) {
+                Log::warning("E-mail d'alerte non envoyé (après réponse)", ['error' => $e->getMessage()]);
+            }
+        });
     }
 
     private function sendSms(Alert $alert, User $user, int $step, ?string $phone): void

@@ -2,7 +2,7 @@
 <div class="space-y-6">
     <div>
         <h1 class="font-display font-extrabold text-2xl sm:text-3xl text-stone-900 tracking-tight">Journal</h1>
-        <p class="text-stone-500 text-sm mt-1.5">Les grandes étapes de l'accompagnement de {{ $child->name }} à l'école.</p>
+        <p class="text-stone-500 text-sm mt-1.5">Les grandes étapes de l'accompagnement {{ \App\Support\Humanize::de($child->name) }} à l'école.</p>
     </div>
 
     @include('livewire.parent-space.partials.child-switch')

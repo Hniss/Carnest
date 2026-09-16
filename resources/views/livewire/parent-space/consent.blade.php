@@ -38,7 +38,7 @@
             @if ($r['active'])
                 <div class="pt-4 border-t border-stone-100">
                     <p class="text-xs text-stone-500 mb-3">
-                        Retirer votre consentement désactive immédiatement le compte CareNest de {{ $r['child']->name }} et en informe l'école.
+                        Retirer votre consentement désactive immédiatement le compte CareNest {{ \App\Support\Humanize::de($r['child']->name) }} et en informe l'école.
                     </p>
                     <button type="button" wire:click="withdraw({{ $r['child']->id }})"
                             wire:confirm="Retirer votre consentement pour {{ $r['child']->name }} ? Le compte sera désactivé immédiatement."

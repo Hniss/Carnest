@@ -76,7 +76,7 @@
 
                 <div class="mt-7 rounded-lg bg-brand-50 border border-brand-100 px-4 py-3 text-xs">
                     <div class="font-semibold text-brand-900 mb-0.5">Compte démo</div>
-                    <div class="text-brand-800 font-mono">yassine@carenest.ma · demo123</div>
+                    <div class="text-brand-800 font-mono">yassine@carenest.ma</div>
                 </div>
             </div>
 

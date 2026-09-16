@@ -37,6 +37,8 @@ return [
 
     'ai' => [
         'provider'        => env('AI_PROVIDER', 'gemini'),
+        // Lot 3 — faux fournisseur de démonstration locale (APP_ENV=local + AI_FAKE=1 uniquement).
+        'fake'            => env('AI_FAKE', false),
         'gemini_key'      => env('GEMINI_API_KEY'),
         'gemini_model'    => env('GEMINI_MODEL', 'gemini-2.5-flash'),
         'openai_key'      => env('OPENAI_API_KEY'),

@@ -123,7 +123,7 @@ class StudentProfile extends Component
         $timeline = collect()
             ->merge(Alert::whereIn('id', $alertIds)->get()->map(fn ($a) => [
                 'at' => $a->created_at, 'kind' => 'signal', 'label' => 'Signal détecté',
-                'detail' => 'Alerte n° ' . $a->id . ' · niveau ' . mb_strtolower(Alert::levelLabel($a->level)) . ($a->reopened_from_id ? ' · réouverture' : ''),
+                'detail' => 'Alerte n° ' . $a->id . ' · gravité ' . mb_strtolower(Alert::levelLabel($a->level)) . ($a->reopened_from_id ? ' · réouverture' : ''),
                 'link' => route('referent.alerts.show', $a->id),
             ]))
             ->merge(AlertLifecycle::whereIn('alert_id', $alertIds)->with('changer')->get()->map(fn ($l) => [

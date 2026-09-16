@@ -30,9 +30,9 @@
     {{-- Barre haute --}}
     <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200">
         <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-            <a href="{{ route('parent.home') }}" wire:navigate class="inline-flex items-center gap-2">
-                <x-carenest-logo variant="full" class="h-7 w-auto" />
-                <span class="hidden sm:inline text-xs text-stone-500 border-l border-stone-200 pl-2">Espace parent</span>
+            <a href="{{ route('parent.home') }}" wire:navigate class="inline-flex items-center gap-2 shrink-0">
+                <x-carenest-logo variant="full" class="h-7 w-auto shrink-0" />
+                <span class="hidden sm:inline lg:hidden xl:inline whitespace-nowrap text-xs text-stone-500 border-l border-stone-200 pl-2">Espace parent</span>
             </a>
             <nav class="hidden lg:flex items-center gap-1" aria-label="Navigation">
                 @foreach ($items as $it)

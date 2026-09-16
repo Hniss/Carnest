@@ -6,6 +6,7 @@ use App\Contracts\SmsSender;
 use App\Services\Adjudicator;
 use App\Services\AIService;
 use App\Services\ClaudeAIService;
+use App\Services\FakeAIService;
 use App\Services\GeminiService;
 use App\Services\LogSmsSender;
 use App\Services\PromptVersionRegistrar;
@@ -19,6 +20,12 @@ class AppServiceProvider extends ServiceProvider
         $this->registerAdjudicator();
 
         $this->app->singleton(AIService::class, function () {
+            // Lot 3 — faux fournisseur pour la démonstration locale UNIQUEMENT
+            // (APP_ENV=local ET AI_FAKE=1) ; jamais par défaut, jamais en production.
+            if ($this->useFakeAi()) {
+                return new FakeAIService();
+            }
+
             $provider = config('services.ai.provider', 'gemini');
 
             if ($provider === 'anthropic') {
@@ -49,6 +56,10 @@ class AppServiceProvider extends ServiceProvider
     private function registerAdjudicator(): void
     {
         $this->app->bind(Adjudicator::class, function () {
+            if ($this->useFakeAi()) {
+                return new Adjudicator(new FakeAIService());
+            }
+
             $provider = config('services.ai.adjudicator_provider', 'gemini');
 
             $client = $provider === 'openai'
@@ -67,8 +78,17 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(SmsSender::class, LogSmsSender::class);
     }
 
+    /** Lot 3 — vrai seulement en environnement local avec AI_FAKE=1. */
+    private function useFakeAi(): bool
+    {
+        return $this->app->environment('local') && filter_var(config('services.ai.fake', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
     public function boot(): void
     {
+        // Lot 3 — dates relatives (« il y a 5 minutes ») en français.
+        \Illuminate\Support\Carbon::setLocale(config('app.locale', 'fr'));
+
         // Lot 2 §6 — enregistre la version courante du prompt (jamais bloquant).
         if (! $this->app->runningUnitTests()) {
             $this->app->make(PromptVersionRegistrar::class)->register();

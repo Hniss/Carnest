@@ -12,7 +12,7 @@
         <section class="card p-5 sm:p-7 space-y-5">
             <div class="flex items-center justify-between gap-3">
                 <div class="eyebrow">Information du {{ Humanize::date($synthesis->sent_at) }}</div>
-                <span class="badge badge-success">Au sujet de {{ $child->name }}</span>
+                <span class="badge badge-success">Au sujet {{ \App\Support\Humanize::de($child->name) }}</span>
             </div>
             @foreach ([
                 ['icon' => 'sparkles',     'title' => 'Ce que CareNest a identifié', 'text' => $synthesis->identified],

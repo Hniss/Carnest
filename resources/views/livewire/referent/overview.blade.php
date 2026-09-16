@@ -61,7 +61,7 @@
             <div class="card overflow-hidden">
                 <div class="px-6 py-4 border-b border-stone-100">
                     <h2 class="font-semibold text-stone-900">File d'attente : signaux à qualifier</h2>
-                    <p class="text-xs text-stone-500 mt-0.5">{{ $queue->count() }} signal{{ $queue->count() > 1 ? 'aux' : '' }} · du plus ancien au plus récent</p>
+                    <p class="text-xs text-stone-500 mt-0.5">{{ $queue->count() }} {{ $queue->count() > 1 ? 'signaux' : 'signal' }} · du plus ancien au plus récent</p>
                 </div>
                 <div class="divide-y divide-stone-100">
                     @forelse ($queue as $alert)
@@ -102,7 +102,7 @@
                         <a href="{{ route('referent.students.show', $s->child_id) }}" wire:navigate class="px-6 py-3.5 flex items-center gap-4 hover:bg-stone-50/60">
                             <div class="flex-1 min-w-0">
                                 <div class="font-medium text-stone-900 truncate">{{ $s->child?->name }}</div>
-                                <div class="text-xs text-stone-500 mt-0.5">{{ $s->child?->classe }} · session close {{ Humanize::dateTime($s->ended_at) }}</div>
+                                <div class="text-xs text-stone-500 mt-0.5">{{ $s->child?->classe }} · session clôturée le {{ Humanize::dateTime($s->ended_at) }}</div>
                             </div>
                             <span class="badge badge-neutral">Faible confiance</span>
                             <x-icon name="chevron-right" size="14" class="text-stone-400" />

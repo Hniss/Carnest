@@ -42,7 +42,7 @@
                             <td class="text-stone-900 text-sm">{{ $l->actor?->name ?? ($l->actor_id ? 'Compte ' . $l->actor_id : 'Système') }}</td>
                             <td><span class="badge badge-neutral">{{ User::roleLabel($l->actor_role) === 'Inconnu' ? $l->actor_role : User::roleLabel($l->actor_role) }}</span></td>
                             <td class="font-mono text-xs text-stone-700">{{ $l->action }}</td>
-                            <td class="text-stone-500 text-sm">{{ $l->target_type ? class_basename($l->target_type) . ' n° ' . $l->target_id : '—' }}</td>
+                            <td class="text-stone-500 text-sm">{{ $l->target_type ? (['Alert' => 'Alerte', 'Child' => 'Élève', 'User' => 'Compte', 'ParentThread' => 'Fil de messagerie', 'ParentSynthesis' => 'Synthèse parent', 'SchoolSetting' => 'Paramètres', 'ReferentDelegation' => 'Délégation', 'AdminNote' => 'Note', 'FollowUp' => 'Suivi', 'AlertAction' => 'Action', 'School' => 'École'][class_basename($l->target_type)] ?? class_basename($l->target_type)) . ' n° ' . $l->target_id : '—' }}</td>
                             <td class="text-stone-500 text-xs font-mono">{{ $l->ip ?? '—' }}</td>
                         </tr>
                     @empty
