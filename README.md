@@ -1,8 +1,8 @@
 # CareNest
 
-Plateforme de bien-être émotionnel pour élèves marocains (5-18 ans, pilote 8-14). Un assistant IA bienveillant écoute l'enfant, classifie son état émotionnel selon les **Zones of Regulation** (Kuypers), et remonte des alertes au référent / à la direction sans jamais stocker les messages bruts.
+Plateforme de bien-être émotionnel pour élèves marocains (5-18 ans, pilote 8-14). Un assistant IA bienveillant, **Care**, écoute l'enfant, repère des signaux selon les **Zones of Regulation** (Kuypers) et remonte des alertes à un référent formé de l'école, sans jamais stocker les messages bruts. L'IA signale, l'humain qualifie.
 
-> **MVP** — Laravel 11 · Livewire 3 · Tailwind 3 · SQLite · Gemini (gratuit) ou Anthropic Claude
+> **MVP v3 (septembre 2026)** — Laravel 13 · Livewire 3 · Tailwind 3 · SQLite · IA interchangeable (OpenAI endpoint UE, Gemini, mode démonstration sans clé)
 
 ---
 
@@ -10,23 +10,14 @@ Plateforme de bien-être émotionnel pour élèves marocains (5-18 ans, pilote 8
 
 | Espace | Rôle | URL | Fonction |
 |---|---|---|---|
+| Élève | — | `/child/login` → `/chat` | Chat avec Care (avatar, mémoire des sujets neutres), utilisable à l'école et hors école |
+| Référent | `referent` | `/login` → `/dashboard-referent` | Vue d'ensemble (files à qualifier, à confirmer, à relire), élèves, fiche élève, traitement d'alerte en 5 étapes, messagerie parents, délégation |
 | Administration | `admin` | `/login` → `/dashboard` | Score climat, zones par classe, charge d'alertes (sans nom d'élève), urgences vitales sans accusé, élèves (`/dashboard/eleves`), comptes école (`/dashboard/comptes`), journal d'accès (`/dashboard/journal`), paramètres (`/settings`) |
-| Référent | `referent` | `/login` → `/dashboard-referent` | Vue d'ensemble, élèves, fiche élève, traitement d'alerte en 5 étapes, messagerie parents, délégation |
 | Parent | `parent` | `/login` → `/parent` | Synthèse de l'école, journal, messagerie avec le référent, consentement, export de ses données |
-| Élève | — | `/child/login` → `/chat` | Chat avec **Care**, l'assistant IA |
-
-**Comptes de démonstration** (`php artisan db:seed`, mots de passe lus dans l'environnement : `DEMO_ADMIN_PASSWORD`, `DEMO_CHILD_PASSWORD`, `DEMO_STAFF_PASSWORD` facultatif) :
-
-| Compte | Rôle |
-|---|---|
-| `admin@carenest.ma` | Administration |
-| `referent@carenest.ma` | Référent |
-| `parent@carenest.ma` | Parent (2 enfants avec consentement) |
-| `yassine@carenest.ma`, `amina@carenest.ma`, `omar@carenest.ma`, `sara@carenest.ma`, `karim@carenest.ma` | Élèves |
 
 Le contrôle de rôle et le cloisonnement par école sont faits côté serveur (middleware `role:` + vérification dans chaque composant). Un délégué temporaire (`referent_delegations`) n'accède qu'aux alertes actives.
 
-L'analyse émotionnelle (zone green / yellow / orange / red) est faite **à la clôture de chaque session** (et en temps réel dès qu'un signal orange/rouge apparaît). Une zone `orange` ou `red` génère automatiquement une **alerte** côté admin.
+**Détection** : chaque message passe par le modèle (zone + type) et par un lexique de crise déterministe qui ne peut que durcir la zone. Dès qu'un signal orange / rouge apparaît, un second modèle relit toute la conversation et confirme ou infirme (double vérification). La pire zone de la session est retenue. Une zone `orange` ou `red` crée une **alerte** pour le référent.
 
 **Types d'alerte (nomenclature unique, `App\Enums\AlertType`)** :
 
@@ -40,9 +31,9 @@ L'analyse émotionnelle (zone green / yellow / orange / red) est faite **à la c
 | `stress` | Stress chronique | non |
 | `humiliation_adulte` | Humiliation par un adulte | non |
 
-Les types vitaux (`danger`, `pensees_negatives`) déclenchent une alerte immédiate quel que soit l'horaire.
+Les types vitaux (`danger`, `pensees_negatives`) déclenchent une alerte immédiate quel que soit l'horaire, avec notification simultanée du référent et de l'administration. Dans la conversation, Care oriente d'abord l'enfant vers un adulte de confiance proche, puis vers le **2511** (Allô enfance en danger) ; le **141** est réservé au danger physique immédiat.
 
-**Conformité** — aucun message brut n'est conservé : seule la synthèse IA (chiffrée au repos), la zone, le timestamp et un drapeau `low_confidence` sont persistés (loi 09-08 + RGPD). Aucune donnée d'identité (prénom, école, classe) n'est envoyée au fournisseur d'IA.
+**Conformité** — aucun message brut n'est conservé : seuls la synthèse (chiffrée au repos), la mémoire de sujets neutres (chiffrée), la zone, le type, l'horodatage et un drapeau `low_confidence` sont persistés (loi 09-08). Aucune donnée d'identité (prénom, école, classe) n'est envoyée au fournisseur d'IA. Toute lecture d'une donnée nominative est journalisée (`audit_logs`, écriture seule). Le compte parent n'est actif qu'après consentement exprès, horodaté, au nom de l'école responsable de traitement.
 
 ---
 
@@ -51,7 +42,7 @@ Les types vitaux (`danger`, `pensees_negatives`) déclenchent une alerte immédi
 - **PHP 8.3+** avec extensions : `mbstring`, `openssl`, `pdo`, `sqlite3`, `tokenizer`, `xml`, `curl`, `fileinfo`
 - **Composer 2.x**
 - **Node 20+** & **npm**
-- Une **clé API Gemini** gratuite : https://aistudio.google.com/app/apikey
+- Facultatif : une clé API **OpenAI** ou **Gemini**. Sans clé, le mode démonstration (`AI_FAKE=1`) fait tourner toute l'application avec des réponses simulées.
 
 > SQLite est utilisé par défaut, aucun serveur MySQL/Postgres requis pour faire tourner.
 
@@ -61,8 +52,8 @@ Les types vitaux (`danger`, `pensees_negatives`) déclenchent une alerte immédi
 
 ```bash
 # 1. Cloner et entrer dans le dossier
-git clone <url-du-repo>
-cd MVP
+git clone https://github.com/Hniss/Carnest.git
+cd Carnest
 
 # 2. Dépendances
 composer install
@@ -72,10 +63,13 @@ npm install
 cp .env.example .env
 php artisan key:generate
 
-# 4. Coller la clé Gemini dans .env (ligne GEMINI_API_KEY=...)
-#    et définir les mots de passe de démonstration (voir « Comptes de démonstration »)
+# 4. Dans .env, choisir UNE des deux options :
+#    a) sans clé IA (recommandé pour tester) : AI_FAKE=1
+#    b) avec clé : AI_PROVIDER=openai + OPENAI_API_KEY=... (ou AI_PROVIDER=gemini + GEMINI_API_KEY=...)
+#    Puis fixer les mots de passe de démonstration :
+#    DEMO_ADMIN_PASSWORD=... (comptes adultes) et DEMO_CHILD_PASSWORD=... (élèves)
 
-# 5. Initialiser la base SQLite + données de démo
+# 5. Initialiser la base SQLite + données de démonstration
 #    Linux/Mac :
 touch database/database.sqlite
 #    Windows PowerShell :
@@ -89,55 +83,63 @@ npm run build
 php artisan serve
 ```
 
-L'app est disponible sur **http://127.0.0.1:8000**.
+L'app est disponible sur **http://127.0.0.1:8000**. Sous Windows, si les pages perdent parfois leur style, lancer `PHP_CLI_SERVER_WORKERS=6 php artisan serve` (serveur de développement mono-thread).
+
+Pour que l'escalade des alertes tourne (relances, notification de l'administration), ouvrir un second terminal : `php artisan schedule:work`.
 
 ---
 
 ## Comptes de démonstration
 
-Les mots de passe ne sont **jamais** dans le dépôt. Le seeder lit deux variables d'environnement :
+Les mots de passe ne sont **jamais** dans le dépôt. Le seeder lit les variables d'environnement :
 
 | Variable (`.env`) | Compte(s) concerné(s) |
 |---|---|
-| `DEMO_ADMIN_PASSWORD` | Administrateur `admin@carenest.ma` (`/login`) |
-| `DEMO_CHILD_PASSWORD` | Élèves `yassine@`, `amina@`, `omar@`, `sara@`, `karim@carenest.ma` (`/child/login`) |
+| `DEMO_ADMIN_PASSWORD` | `admin@carenest.ma` (administration), `referent@carenest.ma` (référent), `parent@carenest.ma` (parent, 2 enfants avec consentement) — `/login` |
+| `DEMO_STAFF_PASSWORD` (facultatif) | remplace `DEMO_ADMIN_PASSWORD` pour le référent et le parent |
+| `DEMO_CHILD_PASSWORD` | Élèves `yassine@`, `amina@`, `omar@`, `sara@`, `karim@carenest.ma` — `/child/login` (8-11 ans : Amina, Sara ; 12-18 ans : Karim) |
 
 Si une variable est absente, le seeder génère un mot de passe aléatoire et l'affiche **une seule fois** dans la console (il n'est écrit nulle part) : relancez `php artisan migrate:fresh --seed` après avoir renseigné le `.env` si vous préférez le fixer.
 
+Les données de démonstration sont fictives (école « Agdal (Démo) », élèves « Démo »).
+
 ---
 
-## Tester le flow complet
+## Tester la nouvelle version, rôle par rôle
 
-1. Connecte-toi côté **enfant** avec un compte ci-dessus.
-2. Discute avec Care — partage une émotion, une difficulté, etc.
-3. Clique sur **« J'ai fini ma session »** en bas.
-   → l'IA analyse la conversation, classe la zone émotionnelle, et crée une alerte si `orange` ou `red`.
-4. Déconnecte-toi, connecte-toi côté **admin**.
-5. Le dashboard montre le score climat de l'établissement, la liste des élèves et les alertes générées.
+**1. Élève → alerte.** Connectez-vous avec `amina@carenest.ma` sur `/child/login`. Discutez avec Care, puis écrivez « mais des fois je veux disparaître ». Care répond avec un soutien renforcé et propose le 2511 ; **rien n'indique à l'enfant qu'une alerte est partie**. Cliquez sur « J'ai fini ma session ».
+
+**2. Référent.** Connectez-vous avec `referent@carenest.ma`. La vue d'ensemble montre l'alerte (type « Pensées négatives », niveau critique, double vérification renseignée). Ouvrez-la : « J'ai pris connaissance », puis les 5 étapes : signal → qualification (obligatoire) → action → suivi → « Informer le parent » (synthèse préremplie, modifiable). Testez aussi la fiche élève, la messagerie et la délégation.
+
+**3. Parent.** Connectez-vous avec `parent@carenest.ma`. La synthèse reçue apparaît en quatre blocs (jamais le type de signal, jamais « l'IA a détecté »), puis le journal, la messagerie avec le référent, le consentement (avec retrait) et l'export de données.
+
+**4. Administration.** Connectez-vous avec `admin@carenest.ma`. Le tableau de bord ne montre aucun nom d'élève, sauf dans le bloc « Urgences sans accusé » (signal vital sans prise de connaissance du référent après 60 minutes ouvrées). Testez la création d'un élève avec consentement, l'import CSV, les comptes école, les paramètres (horaires, plafond de tokens) et le journal d'accès.
+
+**5. Plafond de tokens.** Dans Paramètres, mettez le plafond journalier à 50. Une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Le référent reçoit une notification « Usage inhabituellement élevé ». Remettez 10 000 ensuite.
 
 ---
 
 ## Configuration IA
 
-Le provider est sélectionné via `AI_PROVIDER` dans `.env` :
+Le fournisseur est sélectionné via `AI_PROVIDER` dans `.env` :
 
-- `gemini` (par défaut) — endpoint OpenAI-compatible de Google, clé gratuite, modèle `gemini-2.5-flash`. Retry automatique sur 429/5xx.
-- `openai` — endpoint régional **UE** par défaut (`https://eu.api.openai.com/v1`).
-- `anthropic` — bascule vers Claude (stub, à compléter pour la prod).
-
-Les URL de base sont configurables (résidence des données) : `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`. La version du prompt système (`GeminiService::PROMPT_VERSION`) et le modèle utilisé sont tracés sur chaque session et chaque alerte, avec le nombre de tokens consommés.
+- `openai` — endpoint régional **UE** par défaut (`https://eu.api.openai.com/v1`), modèle `gpt-4o-mini`.
+- `gemini` — endpoint OpenAI-compatible de Google, modèle `gemini-2.5-flash`. Retry automatique sur 429/5xx.
+- `anthropic` — bascule vers Claude (stub, à compléter).
 
 **Tester sans clé d'API (mode démonstration)** — mettez `AI_FAKE=1` dans `.env` (avec `APP_ENV=local`) : un faux fournisseur répond de façon déterministe, la détection par mots-clés, les alertes, la double vérification et tous les écrans fonctionnent sans aucun appel externe. Jamais actif en production.
 
-Pour ajouter un provider, implémenter `App\Services\AIService` et binder dans `AppServiceProvider::register()`.
+Les URL de base sont configurables (résidence des données) : `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`. La version du prompt système (`GeminiService::PROMPT_VERSION`) et le modèle utilisé sont tracés sur chaque session et chaque alerte, avec le nombre de tokens consommés.
 
-**Double vérification (lot 2)** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
+**Double vérification** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
 
 **Versions de prompt** — `GeminiService::PROMPT_VERSION` + `PROMPT_HASH` (SHA-256). Toute modification d'un texte de prompt exige d'incrémenter la version et de mettre à jour le hash (le test `PromptVersionTest` le rappelle). La table `prompt_versions` est alimentée au démarrage.
 
+Pour ajouter un fournisseur, implémenter `App\Services\AIService` et le lier dans `AppServiceProvider::register()`.
+
 ---
 
-## Paging, escalade et planificateur (lot 2)
+## Paging, escalade et planificateur
 
 Les alertes de niveau élevé / critique (ou de type vital) déclenchent une notification interne + un e-mail au référent (texte sans donnée nominative), un SMS pour les signaux vitaux (pilote `log`, interface `App\Contracts\SmsSender` prête pour un fournisseur réel) et, pour les signaux vitaux, une notification simultanée à l'administration.
 
@@ -161,9 +163,9 @@ php artisan schedule:work
 
 Contrôle externe : `GET /up/pager` répond `ok` si un battement date de moins de 3 minutes, `stale` sinon.
 
-Variables d'environnement à renseigner (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `CARENEST_OPS_EMAIL`, `MAIL_MAILER` / `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM_ADDRESS` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés).
+Variables d'environnement (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `CARENEST_OPS_EMAIL`, `MAIL_*` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés dans `storage/logs/laravel.log`).
 
-Plafond journalier de tokens par élève (D8) : `Paramètres` de l'administration, `0` = désactivé. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Au premier dépassement du jour, le référent reçoit une notification « Usage inhabituellement élevé ».
+Plafond journalier de tokens par élève : `Paramètres` de l'administration, `0` = désactivé. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Au premier dépassement du jour, le référent reçoit une notification « Usage inhabituellement élevé ».
 
 ---
 
@@ -171,25 +173,34 @@ Plafond journalier de tokens par élève (D8) : `Paramètres` de l'administratio
 
 ```
 app/
+├── Enums/AlertType.php                 # 7 types, vitaux, libellés
 ├── Livewire/
-│   ├── Admin/Dashboard.php
-│   └── Child/{Login,ChatInterface}.php
-├── Models/
-│   ├── School, SchoolSetting           # multi-école
-│   ├── User, Child                     # 2 guards distincts (web + child)
-│   ├── ChatSession, Alert, AdminNote
+│   ├── Child/{Login,ChatInterface}.php
+│   ├── Referent/{Overview,Students,StudentProfile,AlertTreatment,Messages,Delegation}.php
+│   ├── ParentSpace/{Home,Journal,Messages,Consent,MyData}.php
+│   └── Admin/{Dashboard,ChildProfile,Students,Accounts,Settings,AccessLog}.php
+├── Models/                             # School, SchoolSetting, User, Child, ChatSession, Alert,
+│                                       # AlertLifecycle, AlertAction, FollowUp, ParentChild, ParentThread,
+│                                       # ParentMessage, ParentSynthesis, AuditLog, ReferentDelegation,
+│                                       # AlertNotification, AppNotification, PromptVersion, PagerHeartbeat
 ├── Services/
-│   ├── AIService.php                   # interface
-│   ├── GeminiService.php               # impl. Gemini
-│   └── ClaudeAIService.php             # stub Anthropic
-├── Jobs/ProcessSessionClosure.php      # recalcul score_enfant + status
-└── Observers/ChildObserver.php         # auto-set age_group
+│   ├── AIService.php                   # interface fournisseur IA
+│   ├── GeminiService.php, OpenAIService.php, ClaudeAIService.php (stub), FakeAIService.php
+│   ├── CrisisDetector.php              # lexique de crise (plancher, jamais plafond)
+│   ├── Adjudicator.php                 # double vérification par un second modèle
+│   ├── SessionCloser.php               # clôture : résumé clinique + mémoire neutre + alerte
+│   ├── AlertPager.php, BusinessTime.php, TokenBudget.php
+│   ├── Notifier.php, Audit.php, SynthesisSender.php, ParentAccountProvisioner.php
+│   └── AlertLevelResolver.php, ChildContextBuilder.php, WellbeingTrendResolver.php
+├── Jobs/{ProcessSessionClosure,AdjudicateSignal}.php
+├── Console/Commands/EscalateAlerts.php
+├── Http/Middleware/EnsureRole.php
+└── Observers/{ChildObserver,AlertObserver}.php
 ```
 
 **Stack émotion :** Zones of Regulation (Kuypers)
 - `green` = 100 pts · `yellow` = 70 · `orange` = 35 · `red` = 0
-- `score_enfant` = moyenne pondérée 7 jours glissants
-- `status = 'a_suivre'` automatique si score < 50
+- `score_enfant` = moyenne pondérée 7 jours glissants ; score climat = moyenne de l'établissement
 - Tranches d'âge : `5-7` / `8-11` / `12-18` (calculées depuis `birth_date` quand elle existe)
 
 ---
@@ -200,17 +211,25 @@ app/
 php artisan test
 ```
 
-192 tests · ~600 assertions · couvrent le schéma BDD, modèles, observer, auth, services IA, filet de sécurité, chiffrement, limitation de débit, cloisonnement multi-école.
+302 tests · 1 186 assertions : schéma et migrations rejouables, rôles et cloisonnement multi-école, espaces référent / parent / administration, chaîne d'alerte (adjudication, paging, escalade en heures ouvrées), plafond de tokens, chiffrement, limitation de débit, pseudonymisation vers l'IA, versions de prompt. Aucun appel réseau réel n'est possible depuis la suite (`Http::preventStrayRequests`).
+
+---
+
+## Limites connues de cette version
+
+- Pas de double authentification sur les comptes école.
+- SMS et e-mail en mode journal (`LogSmsSender`, `MAIL_MAILER=log`) : fournisseurs réels à brancher.
+- Interface en français uniquement ; check-in 5-7 ans et lexique darija non implémentés.
+- Jamais déployé hors poste local ; migrations non exercées sur MySQL.
 
 ---
 
 ## Stack technique
 
-- **Backend** : Laravel 11, PHP 8.3, SQLite (dev) / MySQL (prod)
+- **Backend** : Laravel 13, PHP 8.3, SQLite (dev) / MySQL (prod)
 - **Frontend** : Livewire 3 + Tailwind 3 + Alpine.js
-- **Auth** : Laravel Breeze (Volt) — guards `web` (admin) + `child` (élève)
-- **IA** : Gemini 2.5 Flash via endpoint OpenAI-compatible
-- **Queue** : SQLite-backed (jobs de clôture de session)
+- **Auth** : Laravel Breeze (Volt) — guard `web` (admin, référent, parent) + guard `child` (élève)
+- **IA** : OpenAI gpt-4o-mini (endpoint UE) ou Gemini 2.5 Flash, adjudicateur sur un second fournisseur, mode démonstration sans clé
 
 ---
 
