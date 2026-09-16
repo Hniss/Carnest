@@ -127,6 +127,8 @@ Le provider est sélectionné via `AI_PROVIDER` dans `.env` :
 
 Les URL de base sont configurables (résidence des données) : `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`. La version du prompt système (`GeminiService::PROMPT_VERSION`) et le modèle utilisé sont tracés sur chaque session et chaque alerte, avec le nombre de tokens consommés.
 
+**Tester sans clé d'API (mode démonstration)** — mettez `AI_FAKE=1` dans `.env` (avec `APP_ENV=local`) : un faux fournisseur répond de façon déterministe, la détection par mots-clés, les alertes, la double vérification et tous les écrans fonctionnent sans aucun appel externe. Jamais actif en production.
+
 Pour ajouter un provider, implémenter `App\Services\AIService` et binder dans `AppServiceProvider::register()`.
 
 **Double vérification (lot 2)** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
