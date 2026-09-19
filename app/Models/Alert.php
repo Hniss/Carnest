@@ -1,21 +1,18 @@
 <?php
 namespace App\Models;
 
-use App\Observers\AlertObserver;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[ObservedBy(AlertObserver::class)]
 class Alert extends Model
 {
     protected $fillable = [
         'session_id', 'child_id', 'school_id',
         'type', 'level', 'status', 'notified_at',
         'summary', 'signals', 'prompt_version', 'model', 'adjudication',
-        'reopened_from_id', 'escalation_exhausted_at',
+        'escalation_exhausted_at',
     ];
 
     /**
@@ -95,11 +92,6 @@ class Alert extends Model
     public function notifications(): HasMany
     {
         return $this->hasMany(AlertNotification::class);
-    }
-
-    public function reopenedFrom(): BelongsTo
-    {
-        return $this->belongsTo(Alert::class, 'reopened_from_id');
     }
 
     /** Dernière entrée du cycle de vie (statut de traitement courant). */

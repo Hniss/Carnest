@@ -7,9 +7,6 @@
             <h1 class="font-display font-extrabold text-3xl lg:text-[32px] text-stone-900 tracking-tight">Élèves</h1>
             <p class="text-stone-500 text-sm mt-1.5">{{ $children->total() }} élève{{ $children->total() > 1 ? 's' : '' }} · statut de suivi, dernière session, dernier signal.</p>
         </div>
-        <button type="button" wire:click="exportCsv" class="btn-ghost btn-sm">
-            <x-icon name="download" size="14" /> Exporter la liste (CSV)
-        </button>
     </div>
 
     {{-- Filtres --}}

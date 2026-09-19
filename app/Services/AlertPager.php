@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Contracts\SmsSender;
 use App\Enums\AlertType;
 use App\Mail\AlertPagedMail;
-use App\Mail\OpsEscalationMail;
 use App\Models\Alert;
 use App\Models\AlertNotification;
 use App\Models\ReferentDelegation;
@@ -128,12 +127,11 @@ class AlertPager
             }
         }
 
-        // Étape 2 — administration (nom + type, audité) + notification technique H&Y (sans nom).
+        // Étape 2 — administration (nom + type, audité).
         if ($elapsed >= self::STEP_MINUTES[2] && ! $this->stepDone($alert, 2)) {
             if ($school) {
                 $this->notifyAdmins($alert, $school, 2, 'admin.alert.escalation');
             }
-            $this->sendOpsEmail($alert, $elapsed);
             if (! $this->stepDone($alert, 2)) {
                 $this->journal($alert, 2, 'app', null);
             }
@@ -229,22 +227,6 @@ class AlertPager
             Log::warning('E-mail de paging non envoyé', ['alert' => $alert->id, 'error' => $e->getMessage()]);
         }
         $this->journal($alert, $step, 'email', $user->id);
-    }
-
-    private function sendOpsEmail(Alert $alert, int $elapsed): void
-    {
-        $ops = (string) config('services.carenest.ops_email', '');
-        if ($ops === '') {
-            return;
-        }
-        try {
-            $mailable = new OpsEscalationMail($alert->id, (int) $alert->school_id, $elapsed);
-            $pending  = Mail::to($ops);
-            $this->deliver($pending, $mailable);
-        } catch (\Throwable $e) {
-            Log::warning('E-mail technique non envoyé', ['alert' => $alert->id, 'error' => $e->getMessage()]);
-        }
-        $this->journal($alert, 2, 'email', null);
     }
 
     /**

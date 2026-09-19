@@ -7,14 +7,13 @@ use App\Livewire\Concerns\ResolvesReferentAccess;
 use App\Models\Child;
 use App\Models\FollowUp;
 use App\Models\School;
-use App\Services\Audit;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-/** Liste des élèves du référent (lot 1 §3.2) : filtres, recherche, export CSV audité. */
+/** Liste des élèves du référent (lot 1 §3.2) : filtres et recherche. */
 #[Layout('layouts.app')]
 class Students extends Component
 {
@@ -73,30 +72,6 @@ class Students extends Component
                 }
             })
             ->orderBy('name');
-    }
-
-    public function exportCsv()
-    {
-        $rows = $this->query()->get();
-        Audit::log('referent.students.export', null, ['school_id' => $this->school->id]);
-
-        $filename = 'eleves-' . now()->format('Ymd-His') . '.csv';
-
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Nom', 'Classe', 'Âge', 'Statut de suivi', 'Dernière session', 'Dernière alerte', 'Consentement'], ';');
-            foreach ($rows as $c) {
-                fputcsv($out, [
-                    $c->name, $c->classe, $c->age,
-                    FollowUp::statusLabel($c->latestFollowUp?->status),
-                    $c->last_session_at?->format('d/m/Y H:i') ?? '',
-                    $c->last_alert_at ? \Illuminate\Support\Carbon::parse($c->last_alert_at)->format('d/m/Y H:i') : '',
-                    $c->consentingParents->isNotEmpty() ? 'actif' : 'absent',
-                ], ';');
-            }
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function render()

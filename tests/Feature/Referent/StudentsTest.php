@@ -37,18 +37,6 @@ class StudentsTest extends TestCase
             ->assertViewHas('children', fn ($p) => $p->total() === 1);
     }
 
-    public function test_csv_export_is_audited(): void
-    {
-        $school = School::factory()->create();
-        $ref    = $this->makeReferent($school);
-        Child::factory()->for($school)->create(['name' => 'Eleve Demo Export']);
-        $this->actingAs($ref);
-
-        Livewire::test(Students::class)->call('exportCsv')->assertFileDownloaded();
-
-        $this->assertDatabaseHas('audit_logs', ['actor_id' => $ref->id, 'action' => 'referent.students.export', 'school_id' => $school->id]);
-    }
-
     public function test_profile_is_audited_and_note_is_linked_to_referent(): void
     {
         $school = School::factory()->create();

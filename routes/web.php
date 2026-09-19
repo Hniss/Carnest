@@ -91,11 +91,3 @@ Route::view('profile', 'profile')
 
 require __DIR__.'/auth.php';
 
-// Lot 2 — contrôle externe du pager (sans authentification) : « ok » si un
-// battement date de moins de 3 minutes, « stale » sinon.
-Route::get('/up/pager', function () {
-    $last = \App\Models\PagerHeartbeat::query()->max('beat_at');
-    $fresh = $last !== null && \Illuminate\Support\Carbon::parse($last)->gt(now()->subMinutes(3));
-
-    return response($fresh ? 'ok' : 'stale', 200, ['Content-Type' => 'text/plain']);
-})->name('up.pager');

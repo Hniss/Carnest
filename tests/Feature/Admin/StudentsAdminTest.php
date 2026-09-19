@@ -9,14 +9,13 @@ use App\Models\School;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\Support\CreatesRoles;
 use Tests\TestCase;
 
-/** Lot 1 §4 + §6 — gestion administrative des élèves, consentement à la création, import CSV. */
+/** Lot 1 §4 + §6 — gestion administrative des élèves, consentement à la création. */
 class StudentsAdminTest extends TestCase
 {
     use RefreshDatabase, CreatesRoles;
@@ -109,27 +108,5 @@ class StudentsAdminTest extends TestCase
 
         Livewire::test(Students::class)->call('openEdit', $child->id)->set('form.classe', 'CM2')->call('save')->assertHasNoErrors();
         $this->assertSame('CM2', $child->fresh()->classe);
-    }
-
-    public function test_csv_import_validates_line_by_line_and_reports_errors(): void
-    {
-        Notification::fake();
-        $school = School::factory()->create();
-        $admin  = $this->makeAdmin($school);
-        $this->actingAs($admin);
-
-        $csv = "nom;prenom;classe;date_naissance;email_parent;relation\n"
-             . "Demo;Alice;CE1;2018-03-04;alice.parent@carenest.test;mere\n"
-             . "Demo;Bilal;CM2;pas-une-date;bilal.parent@carenest.test;pere\n"
-             . "Demo;Chadi;CM1;2016-01-20;chadi.parent@carenest.test;tuteur\n";
-        $file = UploadedFile::fake()->createWithContent('eleves.csv', $csv);
-
-        $c = Livewire::test(Students::class)->set('importFile', $file)->call('import')->assertHasNoErrors();
-
-        $this->assertSame(2, Child::where('school_id', $school->id)->count());
-        $this->assertNotNull(Child::where('name', 'Alice Demo')->first()?->deactivated_at, 'importé sans consentement = désactivé');
-        $this->assertDatabaseHas('users', ['email' => 'chadi.parent@carenest.test', 'role' => 'parent']);
-        $c->assertSee('Ligne 3')->assertSee('date');
-        $this->assertDatabaseHas('audit_logs', ['actor_id' => $admin->id, 'action' => 'admin.children.import']);
     }
 }

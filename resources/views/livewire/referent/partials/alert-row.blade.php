@@ -13,7 +13,6 @@
         <div class="font-medium text-stone-900 truncate">{{ $alert->child?->name }}</div>
         <div class="text-xs text-stone-500 mt-0.5 truncate">
             {{ $alert->child?->classe }} · {{ $signalLabel }}
-            @if ($alert->reopened_from_id) · <span class="text-orange-700 font-medium">Réouverture</span> @endif
         </div>
     </div>
     @if (! empty($waiting))

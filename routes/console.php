@@ -21,7 +21,7 @@ Schedule::call(fn () => app(\App\Jobs\CloseIdleSessions::class)->handle())
 
 /**
  * Lot 2 (MVP v3) — escalade des alertes sans accusé (5 / 15 / 60 minutes
- * ouvrées, vitales en continu) + battement `pager_heartbeats`, chaque minute.
+ * ouvrées, vitales en continu), chaque minute.
  */
 Schedule::command('carenest:escalate-alerts')
     ->everyMinute()

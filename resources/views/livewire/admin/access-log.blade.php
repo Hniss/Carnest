@@ -6,7 +6,6 @@
             <h1 class="font-display font-extrabold text-3xl lg:text-[32px] text-stone-900 tracking-tight">Journal d'accès</h1>
             <p class="text-stone-500 text-sm mt-1.5">Qui a accédé à quoi, quand, depuis quelle adresse. Aucun contenu n'est journalisé (loi 09-08).</p>
         </div>
-        <button type="button" wire:click="exportCsv" class="btn-ghost btn-sm"><x-icon name="download" size="14" /> Exporter (CSV)</button>
     </div>
 
     <section class="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

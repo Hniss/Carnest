@@ -3,7 +3,6 @@
 namespace Tests\Feature\Referent;
 
 use App\Models\AlertLifecycle;
-use App\Models\ChatSession;
 use App\Models\Child;
 use App\Models\FollowUp;
 use App\Models\School;
@@ -32,7 +31,6 @@ class OverviewTest extends TestCase
         $toConfirm = $this->makeAlert($mine, ['adjudication' => 'a_confirmer']);
         $this->makeAlert($foreign, ['level' => 'critical']);
 
-        ChatSession::create(['child_id' => $mine->id, 'school_id' => $school->id, 'started_at' => now(), 'ended_at' => now(), 'zone' => 'green', 'low_confidence' => true]);
         FollowUp::create(['child_id' => $mine->id, 'status' => 'surveillance', 'next_review_date' => now()->addDays(3)->toDateString(), 'responsable_id' => $ref->id]);
 
         $this->actingAs($ref)
@@ -42,7 +40,6 @@ class OverviewTest extends TestCase
             ->assertDontSee('Eleve Demo Ailleurs')
             ->assertSee('en attente depuis')
             ->assertSee('À confirmer')
-            ->assertSee('À relire')
             ->assertSee('CM2')
             ->assertSee('Suivis à échéance')
             ->assertDontSee('harcelé');

@@ -4,7 +4,6 @@ namespace App\Livewire\Referent;
 
 use App\Livewire\Concerns\ResolvesReferentAccess;
 use App\Models\Alert;
-use App\Models\ChatSession;
 use App\Models\FollowUp;
 use App\Models\School;
 use Illuminate\Support\Collection;
@@ -14,7 +13,7 @@ use Livewire\Component;
 
 /**
  * Vue d'ensemble du référent (lot 1 §3.1) : compteurs par urgence, file des
- * alertes non qualifiées, files « à confirmer » et « à relire », répartition
+ * alertes non qualifiées, file « à confirmer », répartition
  * par classe, suivis à échéance sous 7 jours.
  */
 #[Layout('layouts.app')]
@@ -90,16 +89,6 @@ class Overview extends Component
             ->map->count()->sortDesc();
         $maxByClass = max(1, (int) $byClass->max());
 
-        $toReview = $this->delegateMode ? collect() : ChatSession::query()
-            ->with('child:id,name,classe')
-            ->where('school_id', $this->school->id)
-            ->whereNotNull('ended_at')
-            ->where('low_confidence', true)
-            ->whereDoesntHave('alert')
-            ->latest('ended_at')
-            ->limit(20)
-            ->get();
-
         $followUps = $this->delegateMode ? collect() : FollowUp::query()
             ->with(['child:id,name,classe', 'responsable:id,name'])
             ->whereHas('child', fn ($q) => $q->where('school_id', $this->school->id))
@@ -116,7 +105,6 @@ class Overview extends Component
             'filtered'     => $filtered,
             'queue'        => $queue->values(),
             'toConfirm'    => $toConfirm->values(),
-            'toReview'     => $toReview,
             'byClass'      => $byClass,
             'maxByClass'   => $maxByClass,
             'followUps'    => $followUps,

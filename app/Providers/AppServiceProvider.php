@@ -9,7 +9,6 @@ use App\Services\ClaudeAIService;
 use App\Services\FakeAIService;
 use App\Services\GeminiService;
 use App\Services\LogSmsSender;
-use App\Services\PromptVersionRegistrar;
 use App\Services\OpenAIService;
 use Illuminate\Support\ServiceProvider;
 
@@ -88,10 +87,5 @@ class AppServiceProvider extends ServiceProvider
     {
         // Lot 3 — dates relatives (« il y a 5 minutes ») en français.
         \Illuminate\Support\Carbon::setLocale(config('app.locale', 'fr'));
-
-        // Lot 2 §6 — enregistre la version courante du prompt (jamais bloquant).
-        if (! $this->app->runningUnitTests()) {
-            $this->app->make(PromptVersionRegistrar::class)->register();
-        }
     }
 }

@@ -5,7 +5,6 @@ namespace App\Livewire\Admin;
 use App\Models\AuditLog;
 use App\Models\School;
 use App\Models\User;
-use App\Services\Audit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -15,7 +14,7 @@ use Livewire\WithPagination;
 
 /**
  * Journal d'accès (lot 1 §4) : vue filtrée de audit_logs pour l'école —
- * acteur, rôle, action, cible, date, IP. Jamais de contenu. Export CSV audité.
+ * acteur, rôle, action, cible, date, IP. Jamais de contenu.
  */
 #[Layout('layouts.app')]
 class AccessLog extends Component
@@ -63,30 +62,6 @@ class AccessLog extends Component
             ->when($this->to, fn ($q) => $q->whereDate('created_at', '<=', $this->to))
             ->when($this->action !== '', fn ($q) => $q->where('action', 'like', $this->action . '%'))
             ->latest('created_at')->latest('id');
-    }
-
-    public function exportCsv()
-    {
-        $rows = $this->query()->limit(5000)->get();
-        Audit::log('admin.access_log.export', null, ['school_id' => $this->school->id]);
-
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Date', 'Acteur', 'Rôle', 'Action', 'Cible', 'Identifiant cible', 'IP'], ';');
-            foreach ($rows as $r) {
-                fputcsv($out, [
-                    $r->created_at->format('d/m/Y H:i:s'),
-                    $r->actor?->name ?? ($r->actor_id ? 'Compte ' . $r->actor_id : 'Système'),
-                    User::roleLabel($r->actor_role) === 'Inconnu' ? $r->actor_role : User::roleLabel($r->actor_role),
-                    $r->action,
-                    $r->target_type ? class_basename($r->target_type) : '',
-                    $r->target_id ?? '',
-                    $r->ip ?? '',
-                ], ';');
-            }
-            fclose($out);
-        }, 'journal-acces-' . now()->format('Ymd-His') . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function render()

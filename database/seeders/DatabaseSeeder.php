@@ -37,7 +37,7 @@ class DatabaseSeeder extends Seeder
             'city'  => 'Rabat',
             'email' => 'contact@agdal.carenest.ma',
         ]);
-        $school->setting()->create(['school_id' => $school->id, 'notification_channels' => ['app', 'email']]);
+        $school->setting()->create(['school_id' => $school->id]);
 
         $director = User::create([
             'name'     => 'Mme Benali (Démo)',

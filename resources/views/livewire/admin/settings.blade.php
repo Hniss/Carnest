@@ -74,41 +74,20 @@
                     <p class="text-xs text-stone-500 mt-1">Jamais bloquant : en zone verte, Care clôt chaleureusement ; aucun plafond en cas de signal. 0 = désactivé.</p>
                     @error('dailyTokenCap') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
                 </div>
-                <div>
-                    <label for="sessionMaxMinutes" class="label">Durée maximale d'une séance (minutes)</label>
-                    <input id="sessionMaxMinutes" type="number" min="5" max="180" wire:model="sessionMaxMinutes" class="input" placeholder="Aucune limite">
-                    @error('sessionMaxMinutes') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
-                </div>
+
             </div>
         </section>
 
         <section class="card p-6 lg:p-8 space-y-6">
-            <h2 class="font-semibold text-stone-900">Contacts et canaux de notification</h2>
+            <h2 class="font-semibold text-stone-900">Contacts</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="referentPhone" class="label">Téléphone du référent</label>
                     <input id="referentPhone" type="tel" wire:model="referentPhone" class="input" placeholder="+212…">
                     @error('referentPhone') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
                 </div>
-                <div>
-                    <label for="adminPhone" class="label">Téléphone de l'administration</label>
-                    <input id="adminPhone" type="tel" wire:model="adminPhone" class="input" placeholder="+212…">
-                    @error('adminPhone') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
-                </div>
+
             </div>
-            <fieldset>
-                <legend class="label">Canaux de notification</legend>
-                <div class="flex flex-wrap gap-2">
-                    @foreach ([['app', 'Application (cloche)'], ['email', 'E-mail'], ['sms', 'SMS']] as [$value, $label])
-                        <label class="inline-flex items-center gap-2 text-sm text-stone-700 rounded-lg border border-stone-200 px-3 py-2 cursor-pointer hover:bg-stone-50">
-                            <input type="checkbox" wire:model="notificationChannels" value="{{ $value }}" class="rounded border-stone-300 text-brand-700 focus:ring-brand-700/30">
-                            {{ $label }}
-                        </label>
-                    @endforeach
-                </div>
-                @error('notificationChannels') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
-                @error('notificationChannels.*') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
-            </fieldset>
         </section>
 
         <div class="flex items-center justify-between">

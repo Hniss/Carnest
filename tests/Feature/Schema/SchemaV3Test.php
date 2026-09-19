@@ -70,8 +70,7 @@ class SchemaV3Test extends TestCase
     public function test_school_settings_has_v3_columns_with_defaults(): void
     {
         foreach ([
-            'school_hours_start', 'school_hours_end', 'daily_token_cap',
-            'session_max_minutes', 'referent_phone', 'admin_phone',
+            'school_hours_start', 'school_hours_end', 'daily_token_cap', 'referent_phone',
         ] as $col) {
             $this->assertTrue(Schema::hasColumn('school_settings', $col), "Missing column: $col");
         }
@@ -80,7 +79,6 @@ class SchemaV3Test extends TestCase
         $this->assertSame(10000, $setting->daily_token_cap);
         $this->assertStringStartsWith('08:00', (string) $setting->school_hours_start);
         $this->assertStringStartsWith('17:00', (string) $setting->school_hours_end);
-        $this->assertNull($setting->session_max_minutes);
     }
 
     public function test_users_has_role_and_phone(): void

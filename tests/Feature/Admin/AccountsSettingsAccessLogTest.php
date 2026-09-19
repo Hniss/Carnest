@@ -63,20 +63,17 @@ class AccountsSettingsAccessLogTest extends TestCase
 
         Livewire::test(Settings::class)
             ->set('schoolHoursStart', '08:30')->set('schoolHoursEnd', '16:30')
-            ->set('dailyTokenCap', 12000)->set('sessionMaxMinutes', 25)
-            ->set('referentPhone', '+212600000001')->set('adminPhone', '+212600000002')
-            ->set('notificationChannels', ['app', 'email'])
+            ->set('dailyTokenCap', 12000)
+            ->set('referentPhone', '+212600000001')
             ->call('save')->assertHasNoErrors();
 
         $this->assertDatabaseHas('school_settings', [
             'school_id' => $school->id, 'school_hours_start' => '08:30', 'school_hours_end' => '16:30',
-            'daily_token_cap' => 12000, 'session_max_minutes' => 25,
-            'referent_phone' => '+212600000001', 'admin_phone' => '+212600000002',
+            'daily_token_cap' => 12000, 'referent_phone' => '+212600000001',
         ]);
-        $this->assertSame(['app', 'email'], $school->setting->fresh()->notification_channels);
     }
 
-    public function test_access_log_is_scoped_filterable_and_exportable(): void
+    public function test_access_log_is_scoped_and_filterable(): void
     {
         $school = School::factory()->create();
         $other  = School::factory()->create();
@@ -94,7 +91,5 @@ class AccountsSettingsAccessLogTest extends TestCase
 
         Livewire::test(AccessLog::class)->set('actorId', $ref->id)->assertViewHas('logs', fn ($p) => $p->total() === 1);
         Livewire::test(AccessLog::class)->set('from', now()->addDay()->toDateString())->assertViewHas('logs', fn ($p) => $p->total() === 0);
-        Livewire::test(AccessLog::class)->call('exportCsv')->assertFileDownloaded();
-        $this->assertDatabaseHas('audit_logs', ['actor_id' => $admin->id, 'action' => 'admin.access_log.export']);
     }
 }

@@ -41,7 +41,6 @@ class SchemaLot1Test extends TestCase
         $this->assertTrue(Schema::hasColumns('alert_notifications', ['alert_id', 'channel', 'recipient_id', 'escalation_step', 'sent_at', 'acked_at', 'payload']));
         $this->assertTrue(Schema::hasColumns('app_notifications', ['user_id', 'type', 'title', 'body', 'link', 'read_at']));
         $this->assertTrue(Schema::hasColumn('admin_notes', 'referent_id'));
-        $this->assertTrue(Schema::hasColumn('alerts', 'reopened_from_id'));
     }
 
     public function test_admin_note_exposes_referent_relation(): void

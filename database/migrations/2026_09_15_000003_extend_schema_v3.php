@@ -61,9 +61,7 @@ return new class extends Migration
             $table->time('school_hours_start')->default('08:00')->after('language');
             $table->time('school_hours_end')->default('17:00')->after('school_hours_start');
             $table->unsignedInteger('daily_token_cap')->default(10000)->after('school_hours_end');
-            $table->unsignedSmallInteger('session_max_minutes')->nullable()->after('daily_token_cap');
-            $table->string('referent_phone', 30)->nullable()->after('session_max_minutes');
-            $table->string('admin_phone', 30)->nullable()->after('referent_phone');
+            $table->string('referent_phone', 30)->nullable()->after('daily_token_cap');
         });
 
         // ── users ─────────────────────────────────────────────────────────
@@ -89,8 +87,7 @@ return new class extends Migration
 
         Schema::table('users', fn (Blueprint $t) => $t->dropColumn(['role', 'phone']));
         Schema::table('school_settings', fn (Blueprint $t) => $t->dropColumn([
-            'school_hours_start', 'school_hours_end', 'daily_token_cap',
-            'session_max_minutes', 'referent_phone', 'admin_phone',
+            'school_hours_start', 'school_hours_end', 'daily_token_cap', 'referent_phone',
         ]));
         Schema::table('alerts', fn (Blueprint $t) => $t->dropColumn(['summary', 'signals', 'prompt_version', 'model', 'adjudication']));
         Schema::table('chat_sessions', fn (Blueprint $t) => $t->dropColumn(['tokens_used', 'prompt_version', 'model', 'care_memory']));

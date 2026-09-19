@@ -56,9 +56,4 @@ return [
         'adjudicator_model'    => env('AI_ADJUDICATOR_MODEL'),
     ],
 
-    // Lot 2 §2 — notification technique H&Y à l'étape 2 d'escalade (sans donnée nominative).
-    'carenest' => [
-        'ops_email' => env('CARENEST_OPS_EMAIL'),
-    ],
-
 ];

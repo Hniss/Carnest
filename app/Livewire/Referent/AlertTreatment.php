@@ -244,7 +244,7 @@ class AlertTreatment extends Component
 
     public function render()
     {
-        $this->alert->load(['child', 'lifecycle.changer', 'actions.performer', 'followUps.responsable', 'syntheses.parent', 'reopenedFrom']);
+        $this->alert->load(['child', 'lifecycle.changer', 'actions.performer', 'followUps.responsable', 'syntheses.parent']);
 
         $responsables = User::query()
             ->whereIn('id', $this->school->users()->select('users.id'))

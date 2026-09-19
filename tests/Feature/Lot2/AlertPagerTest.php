@@ -37,7 +37,7 @@ class AlertPagerTest extends TestCase
     private function school(): School
     {
         $school = School::factory()->create();
-        SchoolSetting::updateOrCreate(['school_id' => $school->id], ['referent_phone' => '0600000001', 'admin_phone' => '0600000002']);
+        SchoolSetting::updateOrCreate(['school_id' => $school->id], ['referent_phone' => '0600000001']);
         return $school;
     }
 

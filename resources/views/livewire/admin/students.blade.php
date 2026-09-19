@@ -7,7 +7,6 @@
             <p class="text-stone-500 text-sm mt-1.5">Comptes élèves, consentement parental, activation.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <button type="button" wire:click="openImport" class="btn-ghost btn-sm"><x-icon name="upload" size="14" /> Importer un CSV</button>
             <button type="button" wire:click="openCreate" class="btn-primary btn-sm"><x-icon name="user-plus" size="14" /> Nouvel élève</button>
         </div>
     </div>
@@ -92,36 +91,6 @@
                     <button type="button" wire:click="$set('showForm', false)" class="btn-ghost btn-sm">Annuler</button>
                 </div>
             </form>
-        </section>
-    @endif
-
-    {{-- Import --}}
-    @if ($showImport)
-        <section class="card p-6 lg:p-8">
-            <h2 class="font-semibold text-stone-900 mb-1">Import CSV</h2>
-            <p class="text-xs text-stone-500 mb-4">Colonnes attendues (séparateur point-virgule) : <code class="font-mono">nom;prenom;classe;date_naissance;email_parent;relation</code> — date au format AAAA-MM-JJ, relation : pere, mere ou tuteur. Chaque ligne est validée ; les comptes importés restent désactivés jusqu'au recueil du consentement.</p>
-            <form wire:submit="import" class="flex flex-col sm:flex-row sm:items-end gap-3">
-                <div class="flex-1">
-                    <label for="importFile" class="label">Fichier CSV</label>
-                    <input id="importFile" type="file" wire:model="importFile" accept=".csv,text/csv" class="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border file:border-stone-200 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-700">
-                    @error('importFile') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                </div>
-                <button type="submit" class="btn-primary btn-sm" wire:loading.attr="disabled"><x-icon name="upload" size="14" /> Importer</button>
-                <button type="button" wire:click="$set('showImport', false)" class="btn-ghost btn-sm">Fermer</button>
-            </form>
-            @if ($importCreated !== null)
-                <div class="mt-4 rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm text-brand-800">
-                    {{ $importCreated }} élève{{ $importCreated > 1 ? 's' : '' }} importé{{ $importCreated > 1 ? 's' : '' }}.
-                </div>
-            @endif
-            @if ($importErrors)
-                <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
-                    <div class="font-semibold mb-1">Lignes non importées</div>
-                    <ul class="list-disc pl-5 space-y-0.5">
-                        @foreach ($importErrors as $e) <li>{{ $e }}</li> @endforeach
-                    </ul>
-                </div>
-            @endif
         </section>
     @endif
 

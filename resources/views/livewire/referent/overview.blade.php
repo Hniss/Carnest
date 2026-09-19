@@ -90,29 +90,6 @@
                     @endforelse
                 </div>
             </div>
-
-            @unless ($delegateMode)
-            <div class="card overflow-hidden">
-                <div class="px-6 py-4 border-b border-stone-100">
-                    <h2 class="font-semibold text-stone-900">À relire</h2>
-                    <p class="text-xs text-stone-500 mt-0.5">Sessions à faible confiance, sans signal associé</p>
-                </div>
-                <div class="divide-y divide-stone-100">
-                    @forelse ($toReview as $s)
-                        <a href="{{ route('referent.students.show', $s->child_id) }}" wire:navigate class="px-6 py-3.5 flex items-center gap-4 hover:bg-stone-50/60">
-                            <div class="flex-1 min-w-0">
-                                <div class="font-medium text-stone-900 truncate">{{ $s->child?->name }}</div>
-                                <div class="text-xs text-stone-500 mt-0.5">{{ $s->child?->classe }} · session clôturée le {{ Humanize::dateTime($s->ended_at) }}</div>
-                            </div>
-                            <span class="badge badge-neutral">Faible confiance</span>
-                            <x-icon name="chevron-right" size="14" class="text-stone-400" />
-                        </a>
-                    @empty
-                        <p class="px-6 py-8 text-center text-sm text-stone-400">Aucune session à relire.</p>
-                    @endforelse
-                </div>
-            </div>
-            @endunless
         </div>
 
         {{-- Colonne droite --}}

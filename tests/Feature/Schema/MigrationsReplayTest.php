@@ -30,8 +30,6 @@ class MigrationsReplayTest extends TestCase
         $this->assertTrue(Schema::hasColumn('alerts', 'adjudication'));
         $this->assertTrue(Schema::hasColumn('chat_sessions', 'care_memory'));
         $this->assertTrue(Schema::hasTable('audit_logs'));
-        $this->assertTrue(Schema::hasColumn('alerts', 'reopened_from_id'));
-        $this->assertTrue(Schema::hasColumn('school_settings', 'notification_channels'));
     }
 
     public function test_recreated_tables_keep_canonical_index_names(): void

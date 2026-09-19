@@ -31,9 +31,6 @@
                     <x-level-badge :level="$alert->level" :resolved="$closed" />
                     <x-stage-badge :stage="$stage" />
                     @if ($qualification) <x-qualification-badge :qualification="$qualification" /> @endif
-                    @if ($alert->reopened_from_id)
-                        <span class="badge badge-orange">Réouverture (alerte n° {{ $alert->reopened_from_id }})</span>
-                    @endif
                     @if ($delegateMode)
                         <span class="badge badge-warning"><x-icon name="key" size="12" /> Mode délégation</span>
                     @endif
@@ -280,7 +277,7 @@
         <div>
             <h2 class="font-semibold text-stone-900">Clôture</h2>
             <p class="text-xs text-stone-500 mt-0.5">
-                Clôturer marque l'alerte résolue. Un nouveau signal élevé ou critique dans les 30 jours sera présenté comme une réouverture.
+                Clôturer marque l'alerte résolue.
             </p>
         </div>
         @if ($closed)

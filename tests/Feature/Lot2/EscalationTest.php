@@ -4,13 +4,11 @@ namespace Tests\Feature\Lot2;
 
 use App\Contracts\SmsSender;
 use App\Mail\AlertPagedMail;
-use App\Mail\OpsEscalationMail;
 use App\Models\Alert;
 use App\Models\AlertNotification;
 use App\Models\AppNotification;
 use App\Models\AuditLog;
 use App\Models\Child;
-use App\Models\PagerHeartbeat;
 use App\Models\School;
 use App\Models\SchoolSetting;
 use App\Models\User;
@@ -22,7 +20,7 @@ use Tests\Support\CreatesRoles;
 use Tests\Support\RecordsSms;
 use Tests\TestCase;
 
-/** Lot 2 §2 — escalade en heures ouvrées, étapes 5 / 15 / 60 minutes, battement, route /up/pager. */
+/** Lot 2 §2 — escalade en heures ouvrées, étapes 5 / 15 / 60 minutes. */
 class EscalationTest extends TestCase
 {
     use RefreshDatabase, CreatesRoles;
@@ -36,7 +34,6 @@ class EscalationTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
-        config(['services.carenest.ops_email' => 'ops@hy-way.org']);
         $this->sms = new RecordsSms();
         $this->app->instance(SmsSender::class, $this->sms);
         $this->school = School::factory()->create();
@@ -88,7 +85,7 @@ class EscalationTest extends TestCase
         $this->assertSame(1, AlertNotification::where('alert_id', $alert->id)->where('escalation_step', 1)->where('channel', 'sms')->count());
     }
 
-    public function test_step2_after_15_minutes_notifies_admin_with_name_and_ops_without_name(): void
+    public function test_step2_after_15_minutes_notifies_admin_with_name(): void
     {
         $alert = $this->pagedAlert('harcelement', 'high', name: 'Omar Démo');
 
@@ -100,7 +97,6 @@ class EscalationTest extends TestCase
         $this->assertStringContainsString('Omar', $adminNotif->body);
         $this->assertStringContainsString('Harcèlement', $adminNotif->body);
         $this->assertSame(1, AuditLog::where('action', 'admin.alert.escalation')->where('target_id', $alert->id)->count());
-        Mail::assertSent(OpsEscalationMail::class, fn (OpsEscalationMail $m) => $m->hasTo('ops@hy-way.org') && ! str_contains($m->render(), 'Omar'));
         $this->assertGreaterThanOrEqual(1, $this->stepRows($alert, 2));
 
         app(AlertPager::class)->escalate();
@@ -155,19 +151,6 @@ class EscalationTest extends TestCase
 
         $this->assertSame(0, $this->stepRows($alert, 1));
         $this->assertNull($alert->fresh()->escalation_exhausted_at);
-    }
-
-    public function test_command_writes_heartbeat_and_route_reports_status(): void
-    {
-        Carbon::setTestNow('2026-09-14 10:00:00');
-        $this->get('/up/pager')->assertOk()->assertSee('stale');
-
-        $this->artisan('carenest:escalate-alerts')->assertExitCode(0);
-        $this->assertSame(1, PagerHeartbeat::count());
-        $this->get('/up/pager')->assertOk()->assertSee('ok');
-
-        Carbon::setTestNow('2026-09-14 10:04:00');
-        $this->get('/up/pager')->assertOk()->assertSee('stale');
     }
 
     public function test_command_is_scheduled_every_minute(): void
