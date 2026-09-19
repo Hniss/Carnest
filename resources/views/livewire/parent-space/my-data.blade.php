@@ -12,8 +12,7 @@
             <div>
                 <h2 class="font-semibold text-stone-900">Ce que contient l'export</h2>
                 <ul class="text-sm text-stone-600 mt-2 space-y-1 list-disc pl-5">
-                    <li>Les sessions d'écoute : dates, résumés et zones émotionnelles.</li>
-                    <li>Les signaux détectés, avec leur libellé et leur niveau.</li>
+                    <li>L'identité de votre enfant et l'état de votre consentement.</li>
                     <li>Le journal des étapes de l'accompagnement.</li>
                     <li>Les informations que l'école vous a transmises.</li>
                 </ul>

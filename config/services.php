@@ -52,7 +52,10 @@ return [
         'gemini_base_url'    => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
 
         // Lot 2 §1 — second fournisseur pour la double vérification (adjudicateur), sans persona.
-        'adjudicator_provider' => env('AI_ADJUDICATOR_PROVIDER', 'gemini'),
+        // Spec §6.2 : TOUJOURS un fournisseur différent d'AI_PROVIDER (Claude Sonnet par défaut) ;
+        // clé attendue ANTHROPIC_API_KEY. Le repli en cas de conflit ou de clé absente est
+        // calculé et journalisé par AppServiceProvider::resolveAdjudicatorProvider().
+        'adjudicator_provider' => env('AI_ADJUDICATOR_PROVIDER', 'anthropic'),
         'adjudicator_model'    => env('AI_ADJUDICATOR_MODEL'),
     ],
 

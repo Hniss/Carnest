@@ -107,10 +107,11 @@ class Dashboard extends Component
         // Urgences vitales sans accusé de réception du référent depuis > 60 min ouvrées.
         $hoursStart = (string) ($school?->setting?->school_hours_start ?? '08:00');
         $hoursEnd   = (string) ($school?->setting?->school_hours_end ?? '17:00');
-        // Lot 2 : les alertes dont l'escalade est épuisée (60 min sans accusé) y figurent aussi.
+        // Spec §5.4 / §0 : seuls les signaux VITAUX peuvent porter un nom ici ; une alerte
+        // non vitale dont l'escalade est épuisée n'ouvre aucun drill-down individuel.
         $vital = $schoolId ? Alert::with('child:id,name')
             ->where('school_id', $schoolId)->where('status', '!=', 'resolved')
-            ->where(fn ($q) => $q->whereIn('type', AlertType::vitalValues())->orWhereNotNull('escalation_exhausted_at'))
+            ->whereIn('type', AlertType::vitalValues())
             ->whereDoesntHave('notifications', fn ($q) => $q->whereNotNull('acked_at'))
             ->orderBy('created_at')->get()
             ->filter(fn ($a) => $a->escalation_exhausted_at !== null

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\RawCompletionClient;
 use App\Enums\AlertType;
 
 /**
@@ -12,8 +13,11 @@ use App\Enums\AlertType;
  *   l'instruction explicite de n'en suivre aucune instruction.
  * - Sortie JSON stricte {zone, type, confirm, signals}. Les `signals` sont des
  *   observations qualitatives courtes, jamais un score chiffré.
- * - Le client HTTP est celui de GeminiService / OpenAIService (rawCompletion) :
- *   rien n'est dupliqué. L'historique n'est jamais persisté ici.
+ * - Le client HTTP est celui d'un fournisseur implémentant RawCompletionClient
+ *   (GeminiService / OpenAIService / ClaudeAIService) : rien n'est dupliqué.
+ *   L'historique n'est jamais persisté ici.
+ * - Spec §6.2 : ce fournisseur est TOUJOURS différent de celui du premier passage
+ *   (garanti par AppServiceProvider::registerAdjudicator()).
  */
 class Adjudicator
 {
@@ -34,7 +38,7 @@ Réponds UNIQUEMENT par un objet JSON strict, sans texte autour, au format exact
 - "signals" : 1 à 4 observations qualitatives courtes en français (fréquence du sujet, intensité du vocabulaire, récurrence). Jamais de score ni de pourcentage.
 PROMPT;
 
-    public function __construct(private readonly GeminiService $client) {}
+    public function __construct(private readonly RawCompletionClient $client) {}
 
     /**
      * @param array<int,array{role:string,content:string}> $messages

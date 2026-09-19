@@ -15,6 +15,12 @@ use Illuminate\Support\Str;
  * users.role = parent, mot de passe aléatoire, lien de réinitialisation Laravel
  * (notification standard ResetPassword), ligne parent_child avec consentement
  * horodaté + IP, texte au nom de l'école. Sans consentement, l'enfant est créé désactivé.
+ *
+ * Spec §5.1 — « Aucun compte parent actif sans ce consentement — bloquant, non
+ * optionnel. » : le compte parent lui-même est désactivé (`users.deactivated_at`)
+ * tant qu'aucun enfant à consentement actif ne lui est rattaché, et réactivé au
+ * moment où le consentement est donné (`syncActivation()`). La désactivation est
+ * bloquante à la connexion (`LoginForm` filtre sur `deactivated_at = null`).
  */
 class ParentAccountProvisioner
 {
@@ -28,12 +34,14 @@ class ParentAccountProvisioner
             return $parent;
         }
 
+        // Spec §5.1 — créé désactivé : aucun enfant consenti ne lui est encore rattaché.
         $parent = User::create([
             'name'              => $name ?: Str::before($email, '@'),
             'email'             => $email,
             'password'          => Hash::make(Str::password(24)),
             'role'              => 'parent',
             'email_verified_at' => now(),
+            'deactivated_at'    => now(),
         ]);
 
         Password::broker()->sendResetLink(['email' => $email]);
@@ -58,6 +66,29 @@ class ParentAccountProvisioner
         if (! $consent && ! $child->hasActiveConsent()) {
             $child->forceFill(['deactivated_at' => $child->deactivated_at ?? now()])->save();
         }
+
+        $this->syncActivation($parent);
+
         return $parent->children()->where('children.id', $child->id)->first()->pivot;
+    }
+
+    /**
+     * Spec §5.1 — aligne l'état du compte parent sur le consentement : désactivé tant
+     * qu'aucun enfant à consentement actif ne lui est rattaché, réactivé dès qu'il y en
+     * a un. Appelé à la création / au rattachement et au retrait de consentement.
+     */
+    public function syncActivation(User $parent): void
+    {
+        $hasConsent = $parent->consentedChildren()->exists();
+
+        if (! $hasConsent && $parent->deactivated_at === null) {
+            $parent->forceFill(['deactivated_at' => now()])->save();
+
+            return;
+        }
+
+        if ($hasConsent && $parent->deactivated_at !== null) {
+            $parent->forceFill(['deactivated_at' => null])->save();
+        }
     }
 }

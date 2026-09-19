@@ -20,7 +20,7 @@ use Tests\Support\CreatesRoles;
 use Tests\Support\RecordsSms;
 use Tests\TestCase;
 
-/** Lot 2 §2 — escalade en heures ouvrées, étapes 5 / 15 / 60 minutes. */
+/** Lot 2 §2 — escalade en heures ouvrées, étapes 5 / 60 / 60 minutes (spec §2.5b, §5.4). */
 class EscalationTest extends TestCase
 {
     use RefreshDatabase, CreatesRoles;
@@ -85,22 +85,47 @@ class EscalationTest extends TestCase
         $this->assertSame(1, AlertNotification::where('alert_id', $alert->id)->where('escalation_step', 1)->where('channel', 'sms')->count());
     }
 
-    public function test_step2_after_15_minutes_notifies_admin_with_name(): void
+    /** Spec §5.4 + §2.5b — vital sans accusé depuis 60 min : l'administration est prévenue, nom + type. */
+    public function test_step2_after_60_minutes_notifies_admin_on_vital_signal(): void
     {
-        $alert = $this->pagedAlert('harcelement', 'high', name: 'Omar Démo');
+        $alert = $this->pagedAlert('danger', 'critical', name: 'Omar Démo');
 
-        Carbon::setTestNow('2026-09-14 10:16:00');
+        Carbon::setTestNow('2026-09-14 10:59:00');
+        app(AlertPager::class)->escalate();
+        $this->assertSame(0, AuditLog::where('action', 'admin.alert.escalation')->where('target_id', $alert->id)->count());
+
+        Carbon::setTestNow('2026-09-14 11:01:00');
         app(AlertPager::class)->escalate();
 
-        $adminNotif = AppNotification::where('user_id', $this->admin->id)->latest('id')->first();
+        $adminNotif = AppNotification::where('user_id', $this->admin->id)->where('type', 'alerte_admin')->latest('id')->first();
         $this->assertNotNull($adminNotif);
         $this->assertStringContainsString('Omar', $adminNotif->body);
-        $this->assertStringContainsString('Harcèlement', $adminNotif->body);
+        $this->assertStringContainsString('Danger', $adminNotif->body);
         $this->assertSame(1, AuditLog::where('action', 'admin.alert.escalation')->where('target_id', $alert->id)->count());
         $this->assertGreaterThanOrEqual(1, $this->stepRows($alert, 2));
 
         app(AlertPager::class)->escalate();
         $this->assertSame(1, AuditLog::where('action', 'admin.alert.escalation')->where('target_id', $alert->id)->count());
+    }
+
+    /**
+     * Spec §5.4 — « strictement limitée à ces deux types de signaux à risque vital » :
+     * une alerte NON vitale jamais accusée ne remonte JAMAIS à l'administration ;
+     * la chaîne s'arrête à la relance du référent.
+     */
+    public function test_non_vital_alert_never_reaches_the_administration(): void
+    {
+        $alert = $this->pagedAlert('harcelement', 'high', name: 'Omar Démo');
+
+        // Bien au-delà des trois paliers (5 / 60 / 60 minutes ouvrées).
+        Carbon::setTestNow('2026-09-14 16:00:00');
+        app(AlertPager::class)->escalate();
+
+        $this->assertSame(0, AppNotification::where('user_id', $this->admin->id)->where('type', 'alerte_admin')->count());
+        $this->assertSame(0, AuditLog::where('action', 'admin.alert.escalation')->where('target_id', $alert->id)->count());
+        $this->assertSame(0, AlertNotification::where('alert_id', $alert->id)->where('escalation_step', 2)->whereNotNull('recipient_id')->count());
+        // L'étape 1 (relance du référent), elle, a bien eu lieu.
+        $this->assertGreaterThanOrEqual(1, $this->stepRows($alert, 1));
     }
 
     public function test_step3_after_60_minutes_marks_escalation_exhausted_once(): void

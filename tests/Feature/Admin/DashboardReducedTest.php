@@ -73,4 +73,29 @@ class DashboardReducedTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['actor_id' => $admin->id, 'action' => 'admin.vital.view', 'target_id' => $old->id]);
         $this->assertDatabaseMissing('audit_logs', ['action' => 'admin.vital.view', 'target_id' => $recent->id]);
     }
+
+    /**
+     * Spec §5.4 / §0 — l'anonymisation de l'administration ne connaît qu'une dérogation :
+     * les deux types vitaux. Une alerte NON vitale dont l'escalade est épuisée ne doit
+     * donc afficher aucun nom, ni ouvrir de drill-down individuel.
+     */
+    public function test_non_vital_alert_with_exhausted_escalation_is_never_named(): void
+    {
+        $school = School::factory()->create();
+        $admin  = $this->makeAdmin($school);
+        $child  = Child::factory()->for($school)->create(['name' => 'Eleve Demo Non Vital']);
+
+        $alert = $this->makeAlert($child, ['level' => 'high', 'type' => 'harcelement']);
+        $alert->forceFill([
+            'created_at'              => now()->subDays(2)->setTime(10, 0),
+            'escalation_exhausted_at' => now()->subDays(2)->setTime(11, 0),
+        ])->save();
+
+        $this->actingAs($admin)->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Eleve Demo Non Vital')
+            ->assertDontSee('Harcèlement');
+
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'admin.vital.view', 'target_id' => $alert->id]);
+    }
 }

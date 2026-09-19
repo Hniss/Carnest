@@ -11,7 +11,7 @@ Plateforme de bien-être émotionnel pour élèves marocains (5-18 ans, pilote 8
 | Espace | Rôle | URL | Fonction |
 |---|---|---|---|
 | Élève | — | `/child/login` → `/chat` | Chat avec Care (avatar, mémoire des sujets neutres), utilisable à l'école et hors école |
-| Référent | `referent` | `/login` → `/dashboard-referent` | Vue d'ensemble (files à qualifier, à confirmer, à relire), élèves, fiche élève, traitement d'alerte en 5 étapes, messagerie parents, délégation |
+| Référent | `referent` | `/login` → `/dashboard-referent` | Vue d'ensemble (files à qualifier, à confirmer), élèves, fiche élève, traitement d'alerte en 5 étapes, messagerie parents, délégation |
 | Administration | `admin` | `/login` → `/dashboard` | Score climat, zones par classe, charge d'alertes (sans nom d'élève), urgences vitales sans accusé, élèves (`/dashboard/eleves`), comptes école (`/dashboard/comptes`), journal d'accès (`/dashboard/journal`), paramètres (`/settings`) |
 | Parent | `parent` | `/login` → `/parent` | Synthèse de l'école, journal, messagerie avec le référent, consentement, export de ses données |
 
@@ -113,7 +113,7 @@ Les données de démonstration sont fictives (école « Agdal (Démo) », élèv
 
 **3. Parent.** Connectez-vous avec `parent@carenest.ma`. La synthèse reçue apparaît en quatre blocs (jamais le type de signal, jamais « l'IA a détecté »), puis le journal, la messagerie avec le référent, le consentement (avec retrait) et l'export de données.
 
-**4. Administration.** Connectez-vous avec `admin@carenest.ma`. Le tableau de bord ne montre aucun nom d'élève, sauf dans le bloc « Urgences sans accusé » (signal vital sans prise de connaissance du référent après 60 minutes ouvrées). Testez la création d'un élève avec consentement, l'import CSV, les comptes école, les paramètres (horaires, plafond de tokens) et le journal d'accès.
+**4. Administration.** Connectez-vous avec `admin@carenest.ma`. Le tableau de bord ne montre aucun nom d'élève, sauf dans le bloc « Urgences sans accusé » (signal vital sans prise de connaissance du référent après 60 minutes ouvrées). Testez la création d'un élève avec consentement, les comptes école, les paramètres (horaires, plafond de tokens) et le journal d'accès.
 
 **5. Plafond de tokens.** Dans Paramètres, mettez le plafond journalier à 50. Une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Le référent reçoit une notification « Usage inhabituellement élevé ». Remettez 10 000 ensuite.
 
@@ -131,9 +131,9 @@ Le fournisseur est sélectionné via `AI_PROVIDER` dans `.env` :
 
 Les URL de base sont configurables (résidence des données) : `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`. La version du prompt système (`GeminiService::PROMPT_VERSION`) et le modèle utilisé sont tracés sur chaque session et chaque alerte, avec le nombre de tokens consommés.
 
-**Double vérification** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
+**Double vérification** — chaque signal orange / rouge est relu par un second fournisseur sans persona (`AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`), **toujours différent de celui du premier passage** — par défaut Claude Sonnet, repli journalisé si la clé manque — après la réponse à l'enfant. Désaccord sur un type non vital → alerte « à confirmer » ; type vital → l'alerte part toujours.
 
-**Versions de prompt** — `GeminiService::PROMPT_VERSION` + `PROMPT_HASH` (SHA-256). Toute modification d'un texte de prompt exige d'incrémenter la version et de mettre à jour le hash (le test `PromptVersionTest` le rappelle). La table `prompt_versions` est alimentée au démarrage.
+**Versions de prompt** — `GeminiService::PROMPT_VERSION` + `PROMPT_HASH` (SHA-256). Toute modification d'un texte de prompt exige d'incrémenter la version et de mettre à jour le hash (le test `PromptHashTest` le rappelle).
 
 Pour ajouter un fournisseur, implémenter `App\Services\AIService` et le lier dans `AppServiceProvider::register()`.
 
@@ -148,10 +148,9 @@ Sans accusé de réception du référent, l'escalade suit ces paliers, comptés 
 | Palier | Action |
 |---|---|
 | 5 min | relance référent (app + e-mail + SMS) et délégué actif |
-| 15 min | administration prévenue (nom + type, audité) + notification technique H&Y (`CARENEST_OPS_EMAIL`, sans nom) |
-| 60 min | `alerts.escalation_exhausted_at` posé, visible dans « Urgences sans accusé » |
+| 60 min | `alerts.escalation_exhausted_at` posé ; **signaux vitaux uniquement** : administration prévenue (nom + type, audité). Une alerte non vitale n'est jamais remontée à l'administration. |
 
-La commande `php artisan carenest:escalate-alerts` est planifiée **chaque minute** dans `routes/console.php` et écrit un battement dans `pager_heartbeats`. Le planificateur doit tourner :
+La commande `php artisan carenest:escalate-alerts` est planifiée **chaque minute** dans `routes/console.php`. Le planificateur doit tourner :
 
 ```bash
 # En local
@@ -161,9 +160,7 @@ php artisan schedule:work
 * * * * * cd /chemin/vers/carenest && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Contrôle externe : `GET /up/pager` répond `ok` si un battement date de moins de 3 minutes, `stale` sinon.
-
-Variables d'environnement (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `CARENEST_OPS_EMAIL`, `MAIL_*` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés dans `storage/logs/laravel.log`).
+Variables d'environnement (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `MAIL_*` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés dans `storage/logs/laravel.log`).
 
 Plafond journalier de tokens par élève : `Paramètres` de l'administration, `0` = désactivé. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Au premier dépassement du jour, le référent reçoit une notification « Usage inhabituellement élevé ».
 
@@ -182,10 +179,10 @@ app/
 ├── Models/                             # School, SchoolSetting, User, Child, ChatSession, Alert,
 │                                       # AlertLifecycle, AlertAction, FollowUp, ParentChild, ParentThread,
 │                                       # ParentMessage, ParentSynthesis, AuditLog, ReferentDelegation,
-│                                       # AlertNotification, AppNotification, PromptVersion, PagerHeartbeat
+│                                       # AlertNotification, AppNotification
 ├── Services/
 │   ├── AIService.php                   # interface fournisseur IA
-│   ├── GeminiService.php, OpenAIService.php, ClaudeAIService.php (stub), FakeAIService.php
+│   ├── GeminiService.php, OpenAIService.php, ClaudeAIService.php (adjudicateur), FakeAIService.php
 │   ├── CrisisDetector.php              # lexique de crise (plancher, jamais plafond)
 │   ├── Adjudicator.php                 # double vérification par un second modèle
 │   ├── SessionCloser.php               # clôture : résumé clinique + mémoire neutre + alerte
@@ -195,7 +192,7 @@ app/
 ├── Jobs/{ProcessSessionClosure,AdjudicateSignal}.php
 ├── Console/Commands/EscalateAlerts.php
 ├── Http/Middleware/EnsureRole.php
-└── Observers/{ChildObserver,AlertObserver}.php
+└── Observers/ChildObserver.php
 ```
 
 **Stack émotion :** Zones of Regulation (Kuypers)

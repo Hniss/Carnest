@@ -2,13 +2,14 @@
 
 namespace App\Services;
 
+use App\Contracts\RawCompletionClient;
 use App\Enums\AlertType;
 use App\Models\Child;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class GeminiService implements AIService
+class GeminiService implements AIService, RawCompletionClient
 {
     /**
      * Version du prompt système (D8 / D10) — tracée sur chaque session et chaque alerte.

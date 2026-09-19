@@ -27,12 +27,17 @@ use Illuminate\Support\Facades\Mail;
  * ack()      : accusé de réception du référent (réutilisé par AlertTreatment).
  *
  * Aucun canal ne vise jamais l'enfant. E-mail et SMS ne portent aucune donnée
- * nominative ; seules les notifications internes à l'administration (vital,
- * étape 2) portent le nom de l'élève et le type, chaque envoi étant audité.
+ * nominative ; seules les notifications internes à l'administration portent le
+ * nom de l'élève et le type, chaque envoi étant audité.
+ *
+ * Spec §5.4 — l'administration n'est prévenue QUE sur un signal vital (danger,
+ * pensées négatives) : c'est la seule dérogation à son anonymisation par défaut.
+ * Spec §2.5b — le référent traite sous 60 minutes ; au-delà, l'administration agit.
+ * Une alerte NON vitale s'arrête donc à la relance du référent (étape 1).
  */
 class AlertPager
 {
-    public const STEP_MINUTES = [1 => 5, 2 => 15, 3 => 60];
+    public const STEP_MINUTES = [1 => 5, 2 => 60, 3 => 60];
 
     public const SMS_TEXT = 'CareNest : une alerte attend votre accusé de réception. Connectez-vous à votre espace référent.';
 
@@ -127,9 +132,11 @@ class AlertPager
             }
         }
 
-        // Étape 2 — administration (nom + type, audité).
+        // Étape 2 — administration (nom + type, audité), RÉSERVÉE aux signaux vitaux
+        // (spec §5.4), après 60 minutes sans accusé du référent (spec §2.5b).
         if ($elapsed >= self::STEP_MINUTES[2] && ! $this->stepDone($alert, 2)) {
-            if ($school) {
+            $vital = AlertType::tryFrom((string) $alert->type)?->isVital() ?? false;
+            if ($vital && $school) {
                 $this->notifyAdmins($alert, $school, 2, 'admin.alert.escalation');
             }
             if (! $this->stepDone($alert, 2)) {

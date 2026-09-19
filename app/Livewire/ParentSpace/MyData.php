@@ -2,9 +2,7 @@
 
 namespace App\Livewire\ParentSpace;
 
-use App\Enums\AlertType;
 use App\Livewire\Concerns\ResolvesParentChildren;
-use App\Models\ChatSession;
 use App\Models\ParentSynthesis;
 use App\Services\Audit;
 use App\Services\ParentJournalBuilder;
@@ -14,8 +12,13 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
- * Mes données (lot 1 §5.5) : export texte lisible — résumés, zones, alertes
- * avec libellés, journal, synthèses. Jamais les notes internes ni la qualification.
+ * Mes données (lot 1 §5.5) : export texte lisible — identité de l'enfant, état du
+ * consentement, journal en événements macro, synthèses reçues.
+ *
+ * Spec §3.2 — jamais visible côté parent : le type précis de signal détaillé, les
+ * notes internes, la qualification technique. Les résumés de séance et les zones
+ * émotionnelles ne figurent donc pas dans l'export (Business Plan §4 : « sans
+ * exposer le contenu exact des échanges »).
  */
 #[Layout('layouts.parent')]
 class MyData extends Component
@@ -43,32 +46,6 @@ class MyData extends Component
                 . ($pivot->consent_withdrawn_at ? ' · retiré le ' . Humanize::dateTime($pivot->consent_withdrawn_at) : '');
             $lines[] = str_repeat('-', 60);
 
-            $lines[] = 'Sessions d\'écoute (résumés et zones)';
-            $sessions = ChatSession::where('child_id', $child->id)->whereNotNull('ended_at')->orderBy('ended_at')->get();
-            if ($sessions->isEmpty()) {
-                $lines[] = '  Aucune session.';
-            }
-            foreach ($sessions as $s) {
-                $lines[] = '  ' . Humanize::dateTime($s->ended_at) . ' · zone ' . self::zoneLabel($s->zone) . ($s->low_confidence ? ' (faible confiance)' : '');
-                if ($s->ai_summary) {
-                    $lines[] = '    Résumé : ' . $s->ai_summary;
-                }
-            }
-
-            $lines[] = '';
-            $lines[] = 'Signaux détectés';
-            $alerts = $child->alerts()->orderBy('created_at')->get();
-            if ($alerts->isEmpty()) {
-                $lines[] = '  Aucun signal.';
-            }
-            foreach ($alerts as $a) {
-                $lines[] = '  ' . Humanize::dateTime($a->created_at) . ' · ' . AlertType::labelFor($a->type) . ' · niveau ' . mb_strtolower(\App\Models\Alert::levelLabel($a->level)) . ' · ' . ($a->status === 'resolved' ? 'clôturé' : 'en cours');
-                if ($a->summary) {
-                    $lines[] = '    Résumé : ' . $a->summary;
-                }
-            }
-
-            $lines[] = '';
             $lines[] = 'Journal';
             $events = $journal->build($child);
             if ($events->isEmpty()) {
@@ -103,17 +80,6 @@ class MyData extends Component
         return response()->streamDownload(function () use ($content) {
             echo "\xEF\xBB\xBF" . $content;
         }, 'carenest-mes-donnees-' . now()->format('Ymd-His') . '.txt', ['Content-Type' => 'text/plain; charset=UTF-8']);
-    }
-
-    private static function zoneLabel(?string $zone): string
-    {
-        return match ($zone) {
-            'green'  => 'verte',
-            'yellow' => 'jaune',
-            'orange' => 'orange',
-            'red'    => 'rouge',
-            default  => 'non déterminée',
-        };
     }
 
     public function render()

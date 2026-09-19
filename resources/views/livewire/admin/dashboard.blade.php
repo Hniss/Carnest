@@ -46,7 +46,7 @@
         <div class="divide-y divide-stone-100">
             @forelse ($vital as $a)
                 <div class="px-6 py-3.5 flex items-center gap-4">
-                    <span class="badge badge-danger shrink-0">{{ in_array($a->type, AlertType::vitalValues(), true) ? 'Vital' : 'Sans accusé' }}</span>
+                    <span class="badge badge-danger shrink-0">Vital</span>
                     <div class="flex-1 min-w-0">
                         <div class="font-medium text-stone-900 truncate">{{ $a->child?->name }}</div>
                         <div class="text-xs text-stone-500">

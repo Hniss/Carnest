@@ -138,15 +138,27 @@ class ParentSpaceTest extends TestCase
         $this->makeAlert($child, ['type' => 'isolement']);
         AdminNote::create(['child_id' => $child->id, 'user_id' => $ref->id, 'referent_id' => $ref->id, 'content' => 'NOTE INTERNE ULTRA SECRETE']);
 
+        // L'écran annonce ce que contient réellement l'export (spec §3.2).
+        $this->actingAs($parent)->get('/parent/mes-donnees')
+            ->assertOk()
+            ->assertSee('Ce que contient')
+            ->assertDontSee('résumés et zones émotionnelles')
+            ->assertDontSee('Les signaux détectés');
+
         $response = Livewire::actingAs($parent)->test(MyData::class)->call('export');
         $response->assertFileDownloaded();
         $content = $response->effects['download']['content'] ?? '';
         $content = base64_decode($content, true) ?: $content;
 
         $this->assertStringContainsString('Enfant Demo Export', $content);
-        $this->assertStringContainsString('Résumé de session de démonstration', $content);
-        $this->assertStringContainsString('Isolement', $content);
         $this->assertStringNotContainsString('ULTRA SECRETE', $content);
+
+        // Spec §3.2 — ni le type précis de signal, ni le niveau, ni les résumés côté parent.
+        $this->assertStringNotContainsString('Résumé de session de démonstration', $content);
+        $this->assertStringNotContainsString('Isolement', $content);
+        $this->assertStringNotContainsString('Résumé', $content);
+        $this->assertStringNotContainsString('niveau', $content);
+        $this->assertStringNotContainsString('zone', $content);
         $this->assertDatabaseHas('audit_logs', ['actor_id' => $parent->id, 'action' => 'parent.data.export']);
     }
 
