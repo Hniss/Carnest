@@ -3,7 +3,7 @@
     <div>
         <div class="eyebrow mb-2">{{ optional($school)->name ?? 'Aucune école assignée' }}</div>
         <h1 class="font-display font-extrabold text-3xl lg:text-[32px] text-stone-900 tracking-tight">Paramètres</h1>
-        <p class="text-stone-500 text-sm mt-1.5">Configuration de votre établissement, des horaires, des plafonds et des notifications.</p>
+        <p class="text-stone-500 text-sm mt-1.5">Configuration de votre établissement, des horaires et des notifications.</p>
     </div>
 
     @if ($savedFlash)
@@ -62,19 +62,6 @@
                     <input id="schoolHoursEnd" type="time" wire:model="schoolHoursEnd" class="input">
                     @error('schoolHoursEnd') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
                 </div>
-            </div>
-        </section>
-
-        <section class="card p-6 lg:p-8 space-y-6">
-            <h2 class="font-semibold text-stone-900">Plafonds d'usage</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label for="dailyTokenCap" class="label">Plafond quotidien de tokens par élève</label>
-                    <input id="dailyTokenCap" type="number" min="0" max="200000" step="50" wire:model="dailyTokenCap" class="input">
-                    <p class="text-xs text-stone-500 mt-1">Jamais bloquant : en zone verte, Care clôt chaleureusement ; aucun plafond en cas de signal. 0 = désactivé.</p>
-                    @error('dailyTokenCap') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
-                </div>
-
             </div>
         </section>
 

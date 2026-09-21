@@ -11,7 +11,8 @@ interface AIService
      * @param int $childAge âge de l'enfant
      * @param ?string $childGender 'm' | 'f' | 'x' | null — pour accord de genre dans le prompt (P8 V4)
      * @return array{summary:string, zone:string, alert_type:?string, lowConfidence:bool, tokens:int, model:string}
-     *         alert_type appartient à App\Enums\AlertType (D7) ; tokens = usage.total_tokens (0 si absent) ; model = modèle réellement utilisé.
+     *         alert_type appartient à App\Enums\AlertType (D7) ; tokens = coût de l'appel (usage.total_tokens, 0 si absent) —
+     *         appel système, jamais compté dans le plafond journalier ; model = modèle réellement utilisé.
      */
     public function analyzeSession(array $messages, int $childAge, ?string $childGender = null): array;
 
@@ -28,6 +29,8 @@ interface AIService
      *                              (#7 V5 — signaux récurrents, tendance, résumés). null = pas de mémoire.
      * @param array{hors_horaires_scolaires?: bool} $flags Indicateurs calculés côté serveur (D5 : école fermée).
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, tokens:int, model:string}
+     *         tokens = volume de conversation du tour (réponse produite + message de l'enfant), jamais le prompt
+     *         d'entrée réémis — c'est ce que mesure le plafond journalier D8.
      */
     public function chat(array $messages, int $childAge, ?string $childGender = null, ?string $childContext = null, array $flags = []): array;
 

@@ -226,8 +226,10 @@ class ChatInterface extends Component
                 'low_confidence'   => $aiResult['low_confidence'] ?? false,
             ]);
 
-            // D8 (v3) — comptage des tokens + traçabilité prompt/modèle (le plafond
-            // journalier lui-même est traité au lot 2).
+            // D8 (v3) — comptage du volume de conversation + traçabilité prompt/modèle.
+            // `tokens` = contenu nouveau du tour uniquement (réponse du modèle +
+            // message de l'enfant) ; le prompt système réémis à chaque appel n'est
+            // jamais compté (voir GeminiService::conversationTokens()).
             if ($aiResult !== null) {
                 ChatSession::whereKey($this->sessionId)->increment(
                     'tokens_used',

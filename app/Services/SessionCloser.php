@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\Log;
  *  - dispatchSync(ProcessSessionClosure) pour recalculer score + statut enfant.
  *  - Repli zone-only si l'analyse IA échoue (Gemini 503, etc.).
  *
+ * D8 — aucun appel système de cette clôture (analyse de session, note de
+ * mémoire) n'alimente `tokens_used` : ce compteur ne mesure que le volume
+ * d'échange de l'enfant, seul objet du plafond journalier.
+ *
  * Conformité 09-08 / RGPD : les messages bruts ne servent qu'EN TRANSIT (analyse
  * IA + résolution du niveau d'alerte). Seuls summary/zone/flags sont persistés.
  */
@@ -86,13 +90,16 @@ class SessionCloser
             $finalZone      = $this->detector->maxZone($currentZone, $analysis['zone']);
             $finalAlertType = $analysis['alert_type'] ?? $currentAlertType;
 
-            // D8 / D10 (v3) — traçabilité : tokens consommés, version de prompt, modèle.
+            // D8 / D10 (v3) — traçabilité : version de prompt, modèle.
+            // `tokens_used` n'est PAS incrémenté ici : l'analyse de fin de session
+            // est un appel système (résumé destiné à l'école), pas du volume de
+            // conversation de l'enfant — et c'est ce volume que mesure le plafond
+            // journalier (voir GeminiService::conversationTokens()).
             $session->update([
                 'ended_at'       => now(),
                 'zone'           => $finalZone,
                 'ai_summary'     => $analysis['summary'],
                 'low_confidence' => $analysis['lowConfidence'],
-                'tokens_used'    => (int) $session->tokens_used + (int) ($analysis['tokens'] ?? 0),
                 'prompt_version' => $session->prompt_version ?? GeminiService::PROMPT_VERSION,
                 'model'          => $analysis['model'] ?? $session->model,
             ]);
@@ -153,9 +160,10 @@ class SessionCloser
         try {
             $memory = $this->ai->generateCareMemory($messages, $child->age);
             $text = trim((string) ($memory['memory'] ?? ''));
+            // Idem : la note de mémoire est un appel système, jamais comptée dans
+            // le volume de conversation de l'enfant (plafond D8).
             $session->update([
                 'care_memory' => $text !== '' ? mb_substr($text, 0, 500) : null,
-                'tokens_used' => (int) $session->tokens_used + (int) ($memory['tokens'] ?? 0),
             ]);
         } catch (\Throwable $e) {
             Log::warning('Care memory generation failed', ['session' => $session->id, 'error' => $e->getMessage()]);

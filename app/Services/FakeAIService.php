@@ -46,7 +46,7 @@ class FakeAIService extends GeminiService
             'alert_type'     => $type,
             'is_critical'    => $isCritical,
             'low_confidence' => false,
-            'tokens'         => $this->fakeTokens($messages),
+            'tokens'         => $this->fakeTokens($messages, $message),
             'model'          => self::MODEL,
         ];
     }
@@ -78,7 +78,7 @@ class FakeAIService extends GeminiService
             'zone'          => $worst,
             'alert_type'    => $type,
             'lowConfidence' => false,
-            'tokens'        => $this->fakeTokens($messages),
+            'tokens'        => $this->fakeTokens($messages, $summary),
             'model'         => self::MODEL,
         ];
     }
@@ -194,15 +194,19 @@ class FakeAIService extends GeminiService
         return '';
     }
 
-    /** Volume plausible pour la démonstration du plafond journalier (D8). */
-    private function fakeTokens(array $messages): int
+    /**
+     * Volume plausible pour la démonstration du plafond journalier (D8).
+     *
+     * Même définition que GeminiService::conversationTokens() : uniquement le
+     * CONTENU NOUVEAU du tour (réponse produite + dernier message de l'enfant),
+     * jamais l'historique réémis — sinon la démonstration locale referme la
+     * conversation après quelques échanges, ce que le plafond ne doit jamais faire.
+     */
+    private function fakeTokens(array $messages, string $reply = ''): int
     {
-        $chars = 0;
-        foreach ($messages as $m) {
-            $chars += mb_strlen((string) ($m['content'] ?? ''));
-        }
+        $chars = mb_strlen($reply) + mb_strlen($this->lastUserMessage($messages));
 
-        return 60 + intdiv($chars, 4);
+        return 20 + intdiv($chars, 4);
     }
 
     private function rank(string $zone): int

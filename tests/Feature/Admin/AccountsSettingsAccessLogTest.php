@@ -63,13 +63,12 @@ class AccountsSettingsAccessLogTest extends TestCase
 
         Livewire::test(Settings::class)
             ->set('schoolHoursStart', '08:30')->set('schoolHoursEnd', '16:30')
-            ->set('dailyTokenCap', 12000)
             ->set('referentPhone', '+212600000001')
             ->call('save')->assertHasNoErrors();
 
         $this->assertDatabaseHas('school_settings', [
             'school_id' => $school->id, 'school_hours_start' => '08:30', 'school_hours_end' => '16:30',
-            'daily_token_cap' => 12000, 'referent_phone' => '+212600000001',
+            'referent_phone' => '+212600000001',
         ]);
     }
 

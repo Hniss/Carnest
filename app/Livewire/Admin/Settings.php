@@ -10,7 +10,12 @@ use Livewire\Component;
 
 /**
  * Paramètres de l'établissement — étendus au lot 1 §4 : plage horaire scolaire,
- * plafond quotidien de tokens, téléphone du référent.
+ * téléphone du référent.
+ *
+ * Le plafond quotidien de tokens (`school_settings.daily_token_cap`) n'est
+ * VOLONTAIREMENT pas exposé ici : c'est un réglage interne CareNest, piloté par
+ * le super administrateur, jamais par l'administration de l'établissement.
+ * La colonne reste en base et `TokenBudget::cap()` continue de la lire.
  */
 #[Layout('layouts.app')]
 class Settings extends Component
@@ -29,9 +34,6 @@ class Settings extends Component
 
     #[Validate('required|date_format:H:i|after:schoolHoursStart')]
     public string $schoolHoursEnd = '17:00';
-
-    #[Validate('required|integer|min:0|max:200000')]
-    public int $dailyTokenCap = 10000;
 
     #[Validate('nullable|string|max:30')]
     public string $referentPhone = '';
@@ -52,7 +54,6 @@ class Settings extends Component
             $this->language             = (string) $setting->language;
             $this->schoolHoursStart     = substr((string) ($setting->school_hours_start ?? '08:00'), 0, 5);
             $this->schoolHoursEnd       = substr((string) ($setting->school_hours_end ?? '17:00'), 0, 5);
-            $this->dailyTokenCap        = (int) ($setting->daily_token_cap ?? 10000);
             $this->referentPhone        = (string) $setting->referent_phone;
         }
     }
@@ -72,7 +73,6 @@ class Settings extends Component
                 'language'              => $this->language,
                 'school_hours_start'    => $this->schoolHoursStart,
                 'school_hours_end'      => $this->schoolHoursEnd,
-                'daily_token_cap'       => $this->dailyTokenCap,
                 'referent_phone'        => $this->referentPhone !== '' ? $this->referentPhone : null,
             ]
         );

@@ -95,7 +95,9 @@ class ChatSessionTelemetryTest extends TestCase
         $this->assertSame('Enfant isolé à la récréation.', $alert->summary);
         $this->assertSame(GeminiService::PROMPT_VERSION, $alert->prompt_version);
         $this->assertSame('gemini-test', $alert->model);
-        $this->assertSame(200, $session->fresh()->tokens_used);
+        // D8 — l'analyse de fin de session est un appel système : elle ne compte
+        // pas dans le volume de conversation de l'enfant (plafond journalier).
+        $this->assertSame(0, $session->fresh()->tokens_used);
     }
 
     protected function tearDown(): void

@@ -43,23 +43,50 @@ class GeminiServiceV3Test extends TestCase
         $this->assertStringStartsWith('v3.', GeminiService::PROMPT_VERSION);
     }
 
-    public function test_chat_returns_tokens_and_model(): void
+    /**
+     * D8 — `chat()` compte le VOLUME DE CONVERSATION du tour : ce que le modèle
+     * vient d'écrire (décompte de sortie) plus le message de l'enfant. Le prompt
+     * d'entrée, qui rembarque le prompt système à chaque appel, n'est jamais compté.
+     */
+    public function test_chat_counts_only_the_new_content_not_the_reemitted_prompt(): void
     {
-        Http::fake(['*' => Http::response($this->body("Salut.\nALERT_TYPE: none\nZONE: green", 123))]);
+        $body = ['choices' => [['message' => ['content' => "Salut.\nALERT_TYPE: none\nZONE: green"], 'finish_reason' => 'stop']],
+            'model' => 'gemini-2.5-flash',
+            'usage' => ['prompt_tokens' => 3900, 'completion_tokens' => 40, 'total_tokens' => 3940]];
+        Http::fake(['*' => Http::response($body)]);
 
         $result = $this->service()->chat([['role' => 'user', 'content' => 'bonjour']], 10);
 
-        $this->assertSame(123, $result['tokens']);
+        // 40 tokens de sortie + 'bonjour' (7 caractères → 2 tokens estimés).
+        $this->assertSame(42, $result['tokens']);
         $this->assertSame('gemini-2.5-flash', $result['model']);
     }
 
-    public function test_chat_tokens_default_to_zero_when_usage_missing(): void
+    /** Sans `completion_tokens`, la sortie se déduit de total - entrée. */
+    public function test_chat_derives_output_from_total_minus_prompt(): void
+    {
+        $body = ['choices' => [['message' => ['content' => "Salut.\nALERT_TYPE: none\nZONE: green"], 'finish_reason' => 'stop']],
+            'model' => 'gemini-2.5-flash',
+            'usage' => ['prompt_tokens' => 3900, 'total_tokens' => 3950]];
+        Http::fake(['*' => Http::response($body)]);
+
+        $result = $this->service()->chat([['role' => 'user', 'content' => 'bonjour']], 10);
+
+        $this->assertSame(52, $result['tokens']);
+    }
+
+    /**
+     * Sans aucun détail d'usage, on estime le seul texte produit + le message de
+     * l'enfant — jamais `total_tokens`, qui contiendrait le prompt système.
+     */
+    public function test_chat_tokens_fall_back_to_an_estimate_when_usage_is_missing(): void
     {
         Http::fake(['*' => Http::response($this->body("Salut.\nALERT_TYPE: none\nZONE: green", null))]);
 
         $result = $this->service()->chat([['role' => 'user', 'content' => 'bonjour']], 10);
 
-        $this->assertSame(0, $result['tokens']);
+        // 35 caractères produits (9 tokens) + 'bonjour' (2 tokens).
+        $this->assertSame(11, $result['tokens']);
     }
 
     public function test_analyze_session_returns_tokens_and_model(): void

@@ -294,7 +294,8 @@ PROMPT;
 
         $text = $response['choices'][0]['message']['content'] ?? '';
         $finishReason = $response['choices'][0]['finish_reason'] ?? null;
-        $tokens = $this->usageTokens($response);
+        $lastUserMessage = $this->lastUserContent($messages);
+        $tokens = $this->conversationTokens($response, $lastUserMessage);
         $model  = $this->responseModel($response);
 
         // P14 : si la réponse a été tronquée par max_tokens, on relance avec
@@ -305,7 +306,9 @@ PROMPT;
                 $response = $this->request($systemPrompt, $messages, 3000);
                 $text = $response['choices'][0]['message']['content'] ?? $text;
                 $finishReason = $response['choices'][0]['finish_reason'] ?? null;
-                $tokens += $this->usageTokens($response);
+                // La relance REMPLACE le tour (l'enfant ne voit qu'une réponse) :
+                // on recompte le tour, on ne l'additionne pas.
+                $tokens = $this->conversationTokens($response, $lastUserMessage);
             } catch (\Throwable $e) {
                 Log::warning($this->providerLabel() . 'Service length retry failed', ['error' => $e->getMessage()]);
             }
@@ -385,10 +388,81 @@ PROMPT;
         ];
     }
 
-    /** D8 — total de tokens consommés (usage.total_tokens), 0 si absent. */
+    /**
+     * D8 — total de tokens facturés par l'appel (usage.total_tokens), 0 si absent.
+     *
+     * Mesure le COÛT d'un appel, pas le volume de conversation : il inclut tout
+     * le prompt d'entrée, donc le prompt système réémis à chaque tour. Ne doit
+     * JAMAIS alimenter le plafond journalier — voir conversationTokens().
+     */
     private function usageTokens(array $response): int
     {
         return (int) ($response['usage']['total_tokens'] ?? 0);
+    }
+
+    /**
+     * Volume de CONVERSATION d'un tour, en tokens — c'est ce que compte le
+     * plafond journalier (D8, `chat_sessions.tokens_used`).
+     *
+     * Ce que le compteur mesure : le CONTENU NOUVEAU du tour, c'est-à-dire
+     * ce que le modèle vient d'écrire (décompte de sortie) plus le message que
+     * l'enfant vient d'envoyer. Jamais l'intégralité du prompt d'entrée.
+     *
+     * Pourquoi : chaque appel renvoie l'intégralité du prompt système
+     * (SYSTEM_TEMPLATE, ~15 500 caractères soit ~3 900 tokens) plus tout
+     * l'historique. Compter `usage.total_tokens` faisait donc franchir un
+     * plafond de 10 000 tokens en deux échanges et fermait la conversation,
+     * alors que ce seuil est un détecteur d'usage anormal qui ne doit jamais
+     * bloquer techniquement la conversation.
+     *
+     * Ce que l'API expose réellement (Chat Completions / couche compatible
+     * Gemini) : `usage.prompt_tokens` (entrée), `usage.completion_tokens`
+     * (sortie), `usage.total_tokens`. Ordre de résolution de la sortie :
+     *  1. `completion_tokens` s'il est fourni ;
+     *  2. sinon `total_tokens - prompt_tokens` ;
+     *  3. sinon, faute de détail, estimation du seul texte produit
+     *     (4 caractères par token — approximation usuelle).
+     * Le message de l'enfant est toujours estimé de la même façon : l'API ne
+     * le facture pas séparément du reste du prompt.
+     */
+    private function conversationTokens(array $response, string $userMessage = ''): int
+    {
+        $usage = (array) ($response['usage'] ?? []);
+
+        if (isset($usage['completion_tokens'])) {
+            $output = (int) $usage['completion_tokens'];
+        } elseif (isset($usage['total_tokens'], $usage['prompt_tokens'])) {
+            $output = (int) $usage['total_tokens'] - (int) $usage['prompt_tokens'];
+        } else {
+            $output = $this->estimateTokens((string) ($response['choices'][0]['message']['content'] ?? ''));
+        }
+
+        return max(0, $output) + $this->estimateTokens($userMessage);
+    }
+
+    /** Estimation d'un texte en tokens : 4 caractères par token. */
+    private function estimateTokens(string $text): int
+    {
+        $text = trim($text);
+
+        return $text === '' ? 0 : (int) ceil(mb_strlen($text) / 4);
+    }
+
+    /**
+     * Dernier message écrit par l'enfant dans l'historique transmis — la seule
+     * part d'entrée qui soit du contenu nouveau sur ce tour.
+     *
+     * @param array<int,array{role:string,content:string}> $messages
+     */
+    private function lastUserContent(array $messages): string
+    {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if (($messages[$i]['role'] ?? '') === 'user') {
+                return (string) ($messages[$i]['content'] ?? '');
+            }
+        }
+
+        return '';
     }
 
     /** Modèle réellement servi (champ `model` de la réponse), sinon le modèle configuré. */
