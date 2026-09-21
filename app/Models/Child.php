@@ -41,6 +41,7 @@ class Child extends Authenticatable
             'birth_date'      => 'date',
             'last_session_at' => 'datetime',
             'deactivated_at'  => 'datetime',
+            // Marqueur interne CareNest (dépassement du plafond du jour) — aucune notification.
             'high_usage_notified_on' => 'date',
         ];
     }

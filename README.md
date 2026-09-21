@@ -115,7 +115,7 @@ Les données de démonstration sont fictives (école « Agdal (Démo) », élèv
 
 **4. Administration.** Connectez-vous avec `admin@carenest.ma`. Le tableau de bord ne montre aucun nom d'élève, sauf dans le bloc « Urgences sans accusé » (signal vital sans prise de connaissance du référent après 60 minutes ouvrées). Testez la création d'un élève avec consentement, les comptes école, les paramètres (horaires, téléphone du référent) et le journal d'accès. Le plafond journalier de tokens n'apparaît pas sur cet écran : c'est un réglage interne CareNest.
 
-**5. Plafond de tokens.** Ce seuil n'est pas exposé à l'établissement : il se règle côté CareNest, dans `school_settings.daily_token_cap`. Pour l'observer, abaissez-le temporairement à 50 en base : une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Le référent reçoit une notification « Usage inhabituellement élevé ». Remettez 10 000 ensuite. En usage normal ce seuil n'est jamais atteint : le compteur ne mesure que le contenu échangé avec l'enfant (réponse produite + message envoyé), jamais le prompt système réémis à chaque appel.
+**5. Plafond de tokens.** Ce seuil n'est pas exposé à l'établissement : il se règle côté CareNest, dans `school_settings.daily_token_cap`. Pour l'observer, abaissez-le temporairement à 50 en base : une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Personne n'est notifié : ni l'établissement, ni le référent, ni le parent, ni l'enfant ne voient le plafond. Seule trace, interne à CareNest : la date du dépassement dans `children.high_usage_notified_on`. Remettez 10 000 ensuite. En usage normal ce seuil n'est jamais atteint : le compteur ne mesure que le contenu échangé avec l'enfant (réponse produite + message envoyé), jamais le prompt système réémis à chaque appel.
 
 ---
 
@@ -162,7 +162,7 @@ php artisan schedule:work
 
 Variables d'environnement (voir `.env.example`) : `AI_ADJUDICATOR_PROVIDER`, `AI_ADJUDICATOR_MODEL`, `MAIL_*` (`MAIL_MAILER=log` en local suffit : rien ne plante, les e-mails sont tracés dans `storage/logs/laravel.log`).
 
-Plafond journalier de tokens par élève : réglage interne CareNest (`school_settings.daily_token_cap`, défaut 10 000, `0` = désactivé), jamais visible ni modifiable par l'administration de l'établissement. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Au premier dépassement du jour, le référent reçoit une notification « Usage inhabituellement élevé ».
+Plafond journalier de tokens par élève : réglage interne CareNest (`school_settings.daily_token_cap`, défaut 10 000, `0` = désactivé), jamais visible ni modifiable par l'administration de l'établissement. En zone verte sans alerte, Care clôt chaleureusement la séance ; en zone jaune / orange / rouge ou avec une alerte, aucune limite. Le dépassement n'est notifié à aucun rôle : il pose seulement un marqueur interne CareNest (`children.high_usage_notified_on`), une fois par élève et par jour, destiné au futur tableau de bord de gestion CareNest.
 
 ---
 

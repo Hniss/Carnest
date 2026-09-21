@@ -5,7 +5,11 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Lot 2 (MVP v3) — chaîne d'alerte : escalade épuisée, plafond journalier notifié.
+ * Lot 2 (MVP v3) — chaîne d'alerte : escalade épuisée, marqueur de dépassement du plafond.
+ *
+ * `children.high_usage_notified_on` : marqueur interne CareNest (nom historique conservé).
+ * Porte la date du premier dépassement du plafond journalier de l'enfant ; plus aucune
+ * notification n'en découle — donnée réservée au futur tableau de bord CareNest.
  */
 return new class extends Migration
 {

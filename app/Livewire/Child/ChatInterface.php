@@ -10,7 +10,6 @@ use App\Services\AlertPager;
 use App\Services\ChildContextBuilder;
 use App\Services\CrisisDetector;
 use App\Services\GeminiService;
-use App\Services\Notifier;
 use App\Services\SessionCloser;
 use App\Services\TokenBudget;
 use Illuminate\Support\Facades\Auth;
@@ -272,8 +271,9 @@ class ChatInterface extends Component
      * D8 (lot 2) — plafond de tokens par enfant et par jour.
      *  - zone verte ET aucune alerte sur la session → clôture chaleureuse (SessionCloser).
      *  - zone jaune / orange / rouge, ou alerte en cours → aucune limite.
-     *  - premier dépassement du jour → notification interne au référent, une fois par jour.
-     * L'enfant ne voit jamais de mention de quota, de limite, de tokens ni d'alerte.
+     *  - premier dépassement du jour → marqueur interne CareNest en base, une fois par jour.
+     * Le dépassement n'est notifié à personne : ni l'enfant, ni l'école, ni le référent,
+     * ni le parent, ni le pédopsychiatre n'en voient la moindre trace.
      */
     private function enforceDailyCap(Child $child): void
     {
@@ -282,7 +282,7 @@ class ChatInterface extends Component
         try {
             if (! app(TokenBudget::class)->isExceeded($child)) return;
 
-            $this->notifyHighUsageOnce($child);
+            $this->markHighUsageOnce($child);
 
             $alertOnSession = $this->alertCreated || Alert::where('session_id', $this->sessionId)->exists();
             if ($this->currentZone !== 'green' || $alertOnSession) return;
@@ -311,24 +311,18 @@ class ChatInterface extends Component
         }
     }
 
-    /** Notification « usage inhabituellement élevé » au référent, une seule fois par jour et par enfant. */
-    private function notifyHighUsageOnce(Child $child): void
+    /**
+     * Marqueur interne CareNest du premier dépassement du plafond dans la journée.
+     * Écrit une seule fois par enfant et par jour dans `children.high_usage_notified_on`.
+     * Aucune notification n'est émise : le plafond et ses dépassements sont invisibles
+     * pour l'école, le référent, le parent, le pédopsychiatre et l'enfant. La colonne
+     * ne sert qu'à alimenter le futur tableau de bord de gestion CareNest (fondateurs).
+     */
+    private function markHighUsageOnce(Child $child): void
     {
         $fresh = $child->fresh();
         if ($fresh?->high_usage_notified_on !== null && $fresh->high_usage_notified_on->isSameDay(now())) {
             return;
-        }
-
-        $referent = $child->school?->referent();
-        if ($referent) {
-            $first = trim(explode(' ', trim((string) $child->name))[0]) ?: 'Un élève';
-            app(Notifier::class)->notify(
-                $referent,
-                'usage_eleve',
-                'Usage inhabituellement élevé',
-                "{$first} a dépassé le volume d'échanges habituel aujourd'hui, à surveiller.",
-                '/dashboard-referent/eleves/' . $child->id,
-            );
         }
 
         Child::whereKey($child->id)->update(['high_usage_notified_on' => now()->toDateString()]);

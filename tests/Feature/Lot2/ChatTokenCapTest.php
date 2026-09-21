@@ -14,13 +14,18 @@ use App\Services\AIService;
 use App\Services\Adjudicator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Mockery;
 use Tests\Support\CreatesRoles;
 use Tests\TestCase;
 
-/** D8 — plafond journalier : clôture chaleureuse en vert, aucune coupure sinon, référent notifié une fois par jour. */
+/**
+ * D8 — plafond journalier : clôture chaleureuse en vert, aucune coupure sinon.
+ * Le dépassement n'est notifié à personne (ni école, ni référent, ni parent, ni enfant) ;
+ * il laisse seulement un marqueur interne CareNest en base, une fois par enfant et par jour.
+ */
 class ChatTokenCapTest extends TestCase
 {
     use RefreshDatabase, CreatesRoles;
@@ -76,10 +81,10 @@ class ChatTokenCapTest extends TestCase
         }
         $c->assertDontSee('quota')->assertDontSee('plafond')->assertDontSee('limite');
         $this->assertSame(0, Alert::count());
-        $this->assertSame(1, AppNotification::where('user_id', $this->ref->id)->where('type', 'usage_eleve')->count());
-        $notif = AppNotification::where('user_id', $this->ref->id)->first();
-        $this->assertSame('Usage inhabituellement élevé', $notif->title);
-        $this->assertStringContainsString("Yassine a dépassé le volume d'échanges habituel aujourd'hui, à surveiller.", $notif->body);
+        // Le dépassement ne remonte à personne : aucune notification, quel que soit le rôle.
+        $this->assertSame(0, AppNotification::count());
+        // Mais le fait est enregistré en base pour le futur tableau de bord de gestion CareNest.
+        $this->assertSame('2026-09-15', $this->child->fresh()->high_usage_notified_on->toDateString());
     }
 
     public function test_orange_over_cap_never_cuts_the_conversation(): void
@@ -93,7 +98,11 @@ class ChatTokenCapTest extends TestCase
         $this->assertFalse($c->get('sessionClosed'));
         $this->assertNull(ChatSession::find($c->get('sessionId'))->ended_at);
         $this->assertSame(1, Alert::count());
-        $this->assertSame(1, AppNotification::where('user_id', $this->ref->id)->where('type', 'usage_eleve')->count());
+        // Hors zone verte non plus, le dépassement ne remonte à personne.
+        $this->assertSame(0, AppNotification::where('type', 'usage_eleve')->count());
+        $this->assertSame(0, AppNotification::count());
+        // Marqueur interne posé même hors zone verte (le dépassement a bien eu lieu).
+        $this->assertSame('2026-09-15', $this->child->fresh()->high_usage_notified_on->toDateString());
     }
 
     public function test_yellow_over_cap_continues(): void
@@ -105,20 +114,36 @@ class ChatTokenCapTest extends TestCase
         $this->assertFalse($c->get('sessionClosed'));
     }
 
-    public function test_referent_notified_once_per_day_only(): void
+    /** Le marqueur interne est écrit une seule fois par jour, et le référent ne reçoit jamais rien. */
+    public function test_internal_marker_written_once_per_day_and_referent_never_notified(): void
     {
-        $this->mockAi($this->reply('green', null, 120));
-        Livewire::test(ChatInterface::class)->set('input', 'salut')->call('sendMessage')->call('fetchReply');
+        $writes = [];
+        DB::listen(function ($q) use (&$writes) {
+            if (str_contains($q->sql, 'high_usage_notified_on') && stripos(ltrim($q->sql), 'update') === 0) {
+                $writes[] = $q->sql;
+            }
+        });
 
         $this->mockAi($this->reply('green', null, 120));
         Livewire::test(ChatInterface::class)->set('input', 'salut')->call('sendMessage')->call('fetchReply');
-        $this->assertSame(1, AppNotification::where('type', 'usage_eleve')->count());
+        $this->assertCount(1, $writes);
         $this->assertSame('2026-09-15', $this->child->fresh()->high_usage_notified_on->toDateString());
 
+        // Deuxième dépassement le même jour : aucune réécriture du marqueur.
+        $this->mockAi($this->reply('green', null, 120));
+        Livewire::test(ChatInterface::class)->set('input', 'salut')->call('sendMessage')->call('fetchReply');
+        $this->assertCount(1, $writes);
+
+        // Lendemain : le marqueur est reposé à la nouvelle date.
         Carbon::setTestNow('2026-09-16 10:00:00');
         $this->mockAi($this->reply('green', null, 120));
         Livewire::test(ChatInterface::class)->set('input', 'salut')->call('sendMessage')->call('fetchReply');
-        $this->assertSame(2, AppNotification::where('type', 'usage_eleve')->count());
+        $this->assertCount(2, $writes);
+        $this->assertSame('2026-09-16', $this->child->fresh()->high_usage_notified_on->toDateString());
+
+        // Sur les trois séances, le référent (et tout autre rôle) n'a rien reçu.
+        $this->assertSame(0, AppNotification::count());
+        $this->assertSame(0, AppNotification::where('user_id', $this->ref->id)->count());
     }
 
     public function test_cap_zero_disables_the_limit(): void
@@ -130,6 +155,7 @@ class ChatTokenCapTest extends TestCase
 
         $this->assertFalse($c->get('sessionClosed'));
         $this->assertSame(0, AppNotification::count());
+        $this->assertNull($this->child->fresh()->high_usage_notified_on);
     }
 
     protected function tearDown(): void
