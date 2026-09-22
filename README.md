@@ -115,7 +115,7 @@ Les données de démonstration sont fictives (école « Agdal (Démo) », élèv
 
 **4. Administration.** Connectez-vous avec `admin@carenest.ma`. Le tableau de bord ne montre aucun nom d'élève, sauf dans le bloc « Urgences sans accusé » (signal vital sans prise de connaissance du référent après 60 minutes ouvrées). Testez la création d'un élève avec consentement, les comptes école, les paramètres (horaires, téléphone du référent) et le journal d'accès. Le plafond journalier de tokens n'apparaît pas sur cet écran : c'est un réglage interne CareNest.
 
-**5. Plafond de tokens.** Ce seuil n'est pas exposé à l'établissement : il se règle côté CareNest, dans `school_settings.daily_token_cap`. Pour l'observer, abaissez-le temporairement à 50 en base : une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Personne n'est notifié : ni l'établissement, ni le référent, ni le parent, ni l'enfant ne voient le plafond. Seule trace, interne à CareNest : la date du dépassement dans `children.high_usage_notified_on`. Remettez 10 000 ensuite. En usage normal ce seuil n'est jamais atteint : le compteur ne mesure que le contenu échangé avec l'enfant (réponse produite + message envoyé), jamais le prompt système réémis à chaque appel.
+**5. Plafond de tokens.** Ce seuil n'est pas exposé à l'établissement : il se règle côté CareNest, dans `school_settings.daily_token_cap`. Pour l'observer, abaissez-le temporairement à 50 en base : une session en zone verte se termine par un message chaleureux de Care ; une session avec un signal n'est jamais coupée. Personne n'est notifié : ni l'établissement, ni le référent, ni le parent, ni l'enfant ne voient le plafond. Seule trace, interne à CareNest : la date du dépassement dans `children.high_usage_notified_on`. Remettez ensuite le défaut avec `php artisan carenest:reset-usage --force` : la commande rétablit 10 000 et remet à zéro les compteurs hérités de l'ancien comptage, sans une ligne de SQL. Ne sautez pas cette étape : un plafond laissé à 50 fait clôturer Care dès le premier échange, et il n'est plus modifiable depuis l'écran de l'établissement. En usage normal ce seuil n'est jamais atteint : le compteur ne mesure que le contenu échangé avec l'enfant (réponse produite + message envoyé), jamais le prompt système réémis à chaque appel.
 
 ---
 
@@ -186,11 +186,11 @@ app/
 │   ├── CrisisDetector.php              # lexique de crise (plancher, jamais plafond)
 │   ├── Adjudicator.php                 # double vérification par un second modèle
 │   ├── SessionCloser.php               # clôture : résumé clinique + mémoire neutre + alerte
-│   ├── AlertPager.php, BusinessTime.php, TokenBudget.php
+│   ├── AlertPager.php, BusinessTime.php, TokenBudget.php, UsageReset.php
 │   ├── Notifier.php, Audit.php, SynthesisSender.php, ParentAccountProvisioner.php
 │   └── AlertLevelResolver.php, ChildContextBuilder.php, WellbeingTrendResolver.php
 ├── Jobs/{ProcessSessionClosure,AdjudicateSignal}.php
-├── Console/Commands/EscalateAlerts.php
+├── Console/Commands/{EscalateAlerts,ResetUsage}.php
 ├── Http/Middleware/EnsureRole.php
 └── Observers/ChildObserver.php
 ```
@@ -208,7 +208,7 @@ app/
 php artisan test
 ```
 
-312 tests · 1 265 assertions : schéma et migrations rejouables, rôles et cloisonnement multi-école, espaces référent / parent / administration, chaîne d'alerte (adjudication, paging, escalade en heures ouvrées), plafond de tokens, chiffrement, limitation de débit, pseudonymisation vers l'IA, versions de prompt. Aucun appel réseau réel n'est possible depuis la suite (`Http::preventStrayRequests`).
+324 tests · 1 306 assertions : schéma et migrations rejouables, rôles et cloisonnement multi-école, espaces référent / parent / administration, chaîne d'alerte (adjudication, paging, escalade en heures ouvrées), plafond de tokens, chiffrement, limitation de débit, pseudonymisation vers l'IA, versions de prompt. Aucun appel réseau réel n'est possible depuis la suite (`Http::preventStrayRequests`).
 
 ---
 
