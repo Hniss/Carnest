@@ -74,12 +74,45 @@ class UsageReset
      * Compteurs des sessions antérieures au changement d'unité → 0.
      * Les sessions postérieures ne sont jamais touchées.
      * Retourne le nombre de sessions touchées.
+     *
+     * Borne conservatrice, destinée à la migration automatique : elle ne
+     * traite que ce dont on est certain. Le cas d'une installation qui a
+     * continué à tourner avec l'ancien code APRÈS la date du commit est
+     * couvert par `resetTodayCounters()`, déclenché à la main.
      */
     public function resetLegacyCounters(?int $schoolId = null): int
     {
         return (int) DB::table('chat_sessions')
             ->when($schoolId !== null, fn ($query) => $query->where('school_id', $schoolId))
             ->where('created_at', '<', self::UNIT_CHANGED_AT)
+            ->where('tokens_used', '>', 0)
+            ->update(['tokens_used' => 0]);
+    }
+
+    /**
+     * Compteurs de la JOURNÉE EN COURS → 0, sans condition de date de bascule.
+     *
+     * Réservé au geste humain explicite (`carenest:reset-usage`), jamais joué
+     * par la migration automatique. Il répond au cas réel : une installation
+     * qui tournait encore avec l'ancien code après le commit a0f956f écrit des
+     * compteurs de l'ancienne unité sur des sessions POSTÉRIEURES à la borne.
+     * La reprise conservatrice ne les voit pas, et `TokenBudget::usedToday()`
+     * les somme quand même : l'enfant reste coupé au premier échange jusqu'à
+     * minuit, sans aucune issue.
+     *
+     * Arbitrage assumé : lancer cette commande n'arrive jamais par accident,
+     * et le pire qu'elle coûte est la perte du cumul de consommation d'une
+     * journée — sans commune mesure avec un testeur bloqué sans recours.
+     *
+     * Même fenêtre que `TokenBudget::usedToday()` (début et fin du jour dans
+     * le fuseau de l'application) : on efface exactement ce que le plafond
+     * additionne, ni plus, ni moins.
+     */
+    public function resetTodayCounters(?int $schoolId = null): int
+    {
+        return (int) DB::table('chat_sessions')
+            ->when($schoolId !== null, fn ($query) => $query->where('school_id', $schoolId))
+            ->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()])
             ->where('tokens_used', '>', 0)
             ->update(['tokens_used' => 0]);
     }

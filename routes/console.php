@@ -20,8 +20,11 @@ Schedule::call(fn () => app(\App\Jobs\CloseIdleSessions::class)->handle())
     ->withoutOverlapping();
 
 /**
- * Lot 2 (MVP v3) — escalade des alertes sans accusé (5 / 15 / 60 minutes
- * ouvrées, vitales en continu), chaque minute.
+ * Lot 2 (MVP v3) — escalade des alertes sans accusé, chaque minute.
+ * Paliers réels (`AlertPager::STEP_MINUTES`) : 5 minutes → relance du référent
+ * et du délégué ; 60 minutes → administration prévenue pour les seuls signaux
+ * vitaux, puis escalade marquée épuisée. Délais comptés en heures ouvrées pour
+ * les alertes non vitales, en continu pour les vitales.
  */
 Schedule::command('carenest:escalate-alerts')
     ->everyMinute()

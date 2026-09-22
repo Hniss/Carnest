@@ -208,7 +208,7 @@ app/
 php artisan test
 ```
 
-324 tests · 1 306 assertions : schéma et migrations rejouables, rôles et cloisonnement multi-école, espaces référent / parent / administration, chaîne d'alerte (adjudication, paging, escalade en heures ouvrées), plafond de tokens, chiffrement, limitation de débit, pseudonymisation vers l'IA, versions de prompt. Aucun appel réseau réel n'est possible depuis la suite (`Http::preventStrayRequests`).
+327 tests · 1 318 assertions : schéma et migrations rejouables, rôles et cloisonnement multi-école, espaces référent / parent / administration, chaîne d'alerte (adjudication, paging, escalade en heures ouvrées), plafond de tokens, chiffrement, limitation de débit, pseudonymisation vers l'IA, versions de prompt. Aucun appel réseau réel n'est possible depuis la suite (`Http::preventStrayRequests`).
 
 ---
 

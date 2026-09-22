@@ -10,7 +10,7 @@ class EscalateAlerts extends Command
 {
     protected $signature = 'carenest:escalate-alerts';
 
-    protected $description = 'Escalade les alertes sans accusé de réception (5 / 15 / 60 minutes ouvrées).';
+    protected $description = 'Escalade les alertes sans accusé de réception (5 puis 60 minutes ouvrées ; en continu pour les signaux vitaux).';
 
     public function handle(AlertPager $pager): int
     {

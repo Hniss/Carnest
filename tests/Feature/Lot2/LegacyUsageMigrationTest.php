@@ -130,6 +130,27 @@ class LegacyUsageMigrationTest extends TestCase
         );
     }
 
+    /**
+     * Frontière entre la migration et la commande : une session du JOUR, écrite
+     * dans l'ancienne unité par une installation restée sur l'ancien code, est
+     * postérieure à la borne. La migration automatique ne doit PAS y toucher —
+     * elle reste prudente ; c'est `carenest:reset-usage`, geste humain explicite,
+     * qui la nettoie (voir `ResetUsageCommandTest`).
+     */
+    public function test_the_migration_leaves_a_counter_of_the_current_day_untouched(): void
+    {
+        $school = $this->makeSchool(TokenBudget::DEFAULT_CAP);
+        $dujour = $this->makeSession($school, now()->toDateTimeString(), 12039);
+
+        $this->runMigration();
+
+        $this->assertSame(
+            12039,
+            (int) $dujour->fresh()->tokens_used,
+            'La migration ne traite que ce dont elle est certaine : tout ce qui précède la bascule.'
+        );
+    }
+
     public function test_the_migration_can_be_replayed_without_damage(): void
     {
         $legacy      = $this->makeSchool(50);

@@ -11,9 +11,17 @@ use Illuminate\Support\Carbon;
 /**
  * D8 (MVP v3) — remise en cohérence des données d'usage, à la demande.
  *
- * Même traitement que la migration `2026_09_22_000001_reset_legacy_token_usage`,
+ * Reprend le traitement de la migration `2026_09_22_000001_reset_legacy_token_usage`,
  * rejouable quand on veut, pour une école ou pour toutes : personne n'a jamais
  * à écrire de SQL à la main pour débloquer un plafond journalier.
+ *
+ * Elle va DÉLIBÉRÉMENT plus loin que la migration sur un point : elle remet
+ * aussi à zéro les compteurs de la journée en cours, sans condition de date de
+ * bascule. La migration est automatique, donc prudente ; cette commande est un
+ * geste humain explicite qui signifie « mes compteurs sont faux, nettoie-les ».
+ * C'est ce qui débloque une installation restée sur l'ancien code après le
+ * commit a0f956f, dont les compteurs de l'ancienne unité portent des dates
+ * POSTÉRIEURES à la borne et échappent donc à la reprise conservatrice.
  *
  *   php artisan carenest:reset-usage --force
  *   php artisan carenest:reset-usage --school=3 --force
@@ -24,7 +32,7 @@ class ResetUsage extends Command
                             {--school= : Identifiant de l\'école à traiter (toutes par défaut)}
                             {--force : Exécute sans demander de confirmation}';
 
-    protected $description = "Remet le plafond journalier au défaut lorsqu'il est hérité de l'ancienne unité, et remet à zéro les compteurs de tokens antérieurs au changement d'unité.";
+    protected $description = "Remet le plafond journalier au défaut lorsqu'il est hérité de l'ancienne unité, remet à zéro les compteurs de tokens antérieurs au changement d'unité, et vide les compteurs de la journée en cours (sans condition de date).";
 
     public function handle(UsageReset $reset): int
     {
@@ -58,6 +66,7 @@ class ResetUsage extends Command
         $this->line("Périmètre : {$perimetre}.");
         $this->line("Plafonds strictement inférieurs à {$seuil} (hors 0, qui signifie « désactivé ») remis à {$defaut}.");
         $this->line("Compteurs des sessions créées avant le {$bascule} (UTC) remis à zéro.");
+        $this->line("Compteurs de TOUTES les sessions de la journée en cours remis à zéro, sans condition de date : c'est ce qui débloque une installation restée sur l'ancien code après cette bascule.");
 
         if (! $this->option('force')) {
             // Hors terminal (hook de déploiement, cron, CI), `confirm()` ne pose
@@ -79,10 +88,15 @@ class ResetUsage extends Command
 
         $ecoles   = $reset->resetLegacyCaps($schoolId);
         $sessions = $reset->resetLegacyCounters($schoolId);
+        // Joué APRÈS la reprise historique : une session déjà remise à zéro
+        // ci-dessus n'est plus comptée ici (le filtre exclut les compteurs nuls),
+        // les deux chiffres annoncés ne se recouvrent donc jamais.
+        $dujour   = $reset->resetTodayCounters($schoolId);
 
         $this->newLine();
         $this->info("Plafonds journaliers remis à {$defaut} : {$ecoles} école(s).");
-        $this->info("Compteurs de tokens remis à zéro : {$sessions} session(s).");
+        $this->info("Compteurs antérieurs au {$bascule} remis à zéro : {$sessions} session(s).");
+        $this->info("Compteurs de la journée en cours remis à zéro : {$dujour} session(s).");
 
         return self::SUCCESS;
     }
