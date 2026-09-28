@@ -39,7 +39,7 @@ class SessionCloser
         private readonly AIService $ai,
         private readonly CrisisDetector $detector,
         private readonly AlertLevelResolver $levelResolver,
-        private readonly AlertPager $pager,
+        private readonly AlertUpgrader $upgrader,
     ) {}
 
     /**
@@ -87,18 +87,34 @@ class SessionCloser
         try {
             $analysis = $this->ai->analyzeSession($messages, $child->age, $child->gender ?? null);
 
-            $finalZone      = $this->detector->maxZone($currentZone, $analysis['zone']);
-            $finalAlertType = $analysis['alert_type'] ?? $currentAlertType;
+            $finalZone = $this->detector->maxZone($currentZone, $analysis['zone']);
+
+            // Le type retenu est le PIRE des trois lectures (celui scellé pendant la
+            // session, celui du navigateur, celui de l'analyse finale) — jamais le
+            // dernier en date. Une alerte ne redescend pas (base fondatrice B4).
+            $finalAlertType = SignalSeverity::maxType(
+                $session->worst_alert_type,
+                $currentAlertType,
+                $analysis['alert_type'] ?? null,
+            );
 
             // D8 / D10 (v3) — traçabilité : version de prompt, modèle.
             // `tokens_used` n'est PAS incrémenté ici : l'analyse de fin de session
             // est un appel système (résumé destiné à l'école), pas du volume de
             // conversation de l'enfant — et c'est ce volume que mesure le plafond
             // journalier (voir GeminiService::conversationTokens()).
+            // Le résumé final remplace le résumé courant — sauf s'il est vide : dans ce
+            // cas le résumé courant écrit pendant la session est conservé, il vaut
+            // toujours mieux qu'une alerte sans résumé.
+            $finalSummary = trim((string) ($analysis['summary'] ?? ''));
+            if ($finalSummary === '') {
+                $finalSummary = trim((string) $session->ai_summary);
+            }
+
             $session->update([
                 'ended_at'       => now(),
                 'zone'           => $finalZone,
-                'ai_summary'     => $analysis['summary'],
+                'ai_summary'     => $finalSummary !== '' ? $finalSummary : $session->ai_summary,
                 'low_confidence' => $analysis['lowConfidence'],
                 'prompt_version' => $session->prompt_version ?? GeminiService::PROMPT_VERSION,
                 'model'          => $analysis['model'] ?? $session->model,
@@ -186,20 +202,37 @@ class SessionCloser
         bool $alertAlreadyCreated,
         array $messages = [],
     ): bool {
-        if (! in_array($zone, ['orange', 'red'], true)) {
-            return false;
-        }
+        $session->refresh();
 
-        if ($alertAlreadyCreated || Alert::where('session_id', $session->id)->exists()) {
+        // Niveau retenu : le pire entre celui scellé pendant la session (calculé tant
+        // que les messages étaient encore en mémoire) et ceux que la clôture peut
+        // recalculer. Le niveau est résolu pour CHAQUE type lu — le classement des
+        // types et celui des niveaux ne coïncident pas (`humiliation_adulte` vaut +2
+        // facteurs de niveau tout en étant moins haut dans l'ordre des types).
+        $level = $session->worst_level;
+        if ($userContents !== []) {
+            $candidates = array_unique(array_filter([$alertType, $session->worst_alert_type]));
+            foreach ($candidates !== [] ? $candidates : [null] as $candidate) {
+                $level = SignalSeverity::maxLevel($level, $this->levelResolver->resolve($candidate, $zone, $userContents));
+            }
+        }
+        $level = $level ?? SignalSeverity::levelFromZone($zone);
+
+        // Une alerte existe déjà : elle est MISE À NIVEAU (type, niveau, résumé) au
+        // lieu d'être laissée figée sur le premier signal, et la chaîne de notification
+        // est relancée si le palier atteint n'avait pas encore été servi.
+        $existing = Alert::where('session_id', $session->id)->orderBy('id')->first();
+        if ($existing !== null) {
+            $this->upgrader->sync($existing, $alertType, $level, $session->ai_summary);
+
             return true;
         }
 
-        $level = $zone === 'red'
-            ? 'critical'
-            : $this->levelResolver->resolve($alertType, $zone, $userContents);
+        if ($alertAlreadyCreated || ! in_array($zone, ['orange', 'red'], true)) {
+            return $alertAlreadyCreated;
+        }
 
         // D10 (v3) — summary = résumé IA de la session (chiffré au repos) + traçabilité prompt/modèle.
-        $session->refresh();
         $alert = Alert::create([
             'session_id'     => $session->id,
             'child_id'       => $child->id,
@@ -211,11 +244,7 @@ class SessionCloser
             'model'          => $session->model,
         ]);
 
-        try {
-            $this->pager->page($alert);
-        } catch (\Throwable $e) {
-            Log::error('Alert paging failed', ['alert' => $alert->id, 'error' => $e->getMessage()]);
-        }
+        $this->upgrader->page($alert);
 
         if ($userContents !== [] && $messages !== []) {
             AdjudicateSignal::dispatchAfterResponse($alert->id, $messages, $zone, $alertType);

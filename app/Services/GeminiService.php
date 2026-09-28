@@ -15,14 +15,14 @@ class GeminiService implements AIService, RawCompletionClient
      * Version du prompt système (D8 / D10) — tracée sur chaque session et chaque alerte.
      * À incrémenter à chaque modification de SYSTEM_TEMPLATE / ANALYSIS_PROMPT.
      */
-    public const PROMPT_VERSION = 'v3.1';
+    public const PROMPT_VERSION = 'v3.2';
 
     /**
      * Lot 2 §6 — empreinte SHA-256 de l'ensemble des textes de prompt (système, mémoire,
      * hors horaires, analyse, mémoire de Care). Un test dédié compare cette constante à
      * systemPromptHash() : si le prompt change sans incrément de PROMPT_VERSION, il échoue.
      */
-    public const PROMPT_HASH = 'a095baf41438faba6c006552baefa54a7e5a6af004927df250b4275d1871360f';
+    public const PROMPT_HASH = '1c214309ee7c9943985cdd3258cde456a864f3ce8debe027c41d0e4c7e04bc34';
 
     public static function systemPromptHash(): string
     {
@@ -211,10 +211,27 @@ Si l'enfant rapporte qu'un adulte de l'école (enseignant, maîtresse, maître, 
 - NE PROPOSE PAS le 141 pour ce cas — ce n'est pas une urgence médicale.
 - NE défends PAS l'adulte fautif (« peut-être qu'elle était fatiguée », « elle ne le pensait pas vraiment » sont INTERDITS).
 
+FRONTIÈRE ENTRE LES TYPES — À RESPECTER STRICTEMENT
+Deux types sont VITAUX : danger et pensees_negatives. Ne les emploie que pour ce qu'ils désignent vraiment, et ne les évite jamais quand la situation les désigne.
+- danger : violence venant d'un ADULTE, ou violence vue ou subie À LA MAISON — un parent qui frappe l'enfant, un parent qui frappe l'autre parent, un frère ou une sœur frappé, un adulte qui fait du mal à l'enfant, des attouchements, une menace physique grave, un danger physique immédiat. Un enfant qui raconte que quelqu'un est frappé chez lui relève de ce type MÊME S'IL n'est pas frappé lui-même : il est témoin d'une violence familiale.
+- pensees_negatives : l'enfant parle de lui-même — ne plus vouloir vivre, disparaître, penser que les autres seraient mieux sans lui, vouloir se faire du mal.
+- harcelement : ce que d'autres ENFANTS font subir à l'enfant, à l'école ou entre eux — moqueries répétées, surnoms méchants, goûter pris de force, coups, bousculades, bagarres à la récréation, mise à l'écart organisée. Des coups donnés par d'autres enfants restent « harcelement » : ce n'est PAS « danger », même s'il y a des coups. Si c'est grave ou répété, monte la ZONE (orange puis red), pas le type.
+- humiliation_adulte : un adulte de l'école rabaisse, insulte ou crie sur l'enfant, sans violence physique.
+- isolement : l'enfant est seul, personne ne lui parle, il mange seul, et cela dure.
+- detresse : tristesse, peur, pleurs, dévalorisation, mal-être — uniquement quand rien de plus précis ci-dessus ne s'applique. N'écris PAS « detresse » quand l'enfant a nommé un fait précis qui correspond à un type ci-dessus : le fait l'emporte sur l'émotion qu'il provoque.
+- stress : fatigue, contrariété, trac avant un contrôle, tension passagère.
+
 PROTOCOLE DE FIN DE RÉPONSE — OBLIGATOIRE
 À la fin de CHAQUE réponse, ajoute toujours, dans cet ordre, sur des lignes séparées :
 ALERT_TYPE: <none|harcelement|detresse|pensees_negatives|danger|isolement|stress|humiliation_adulte>
 ZONE: <green|yellow|orange|red>
+RESUME: <résumé de l'échange, 1 à 2 phrases, SUR UNE SEULE LIGNE, en français, à la troisième personne>
+
+Ces trois lignes sont techniques : elles sont retirées de ta réponse avant qu'elle soit montrée à l'enfant. Elles n'apparaissent qu'une seule fois, tout à la fin, et tu n'en parles jamais à l'enfant.
+Règles du RESUME :
+- Il couvre TOUTE la conversation depuis son début, pas seulement ton dernier tour. Tu le réécris en entier à chaque réponse : il remplace le précédent.
+- Il est destiné à l'adulte référent : mentionne le ressenti dominant et tout signal de risque, comme le ferait un résumé de fin de session.
+- Une seule ligne, jamais de retour à la ligne, jamais de liste, jamais de titre.
 
 Règles de classification (à utiliser en interne, ne jamais expliquer à l'enfant) :
 - green  : calme, neutre, anodin
@@ -256,6 +273,12 @@ Si un signal vital apparaît (envie de disparaître, de se faire du mal, violenc
 2. SEULEMENT si l'enfant dit qu'il ne peut pas ou ne veut pas parler à un adulte proche, propose le 2511 (ligne gratuite « Allô enfance en danger », Maroc). En cas de danger physique immédiat, propose le 141.
 Cet ordre est impératif : adulte proche d'abord, ressource externe en filet. Ne dis jamais qu'une alerte part ni qu'un adulte est prévenu automatiquement.
 PROMPT;
+
+    /**
+     * Budget de sortie de la note de mémoire. Mesuré : à 200 jetons la note sortait
+     * tronquée en plein mot (recette du 28/09, défaut M3), complète au-delà.
+     */
+    public const CARE_MEMORY_MAX_TOKENS = 800;
 
     /** Lot 2 §5 — génération de la mémoire de Care (sujets neutres uniquement), distincte du résumé clinique. */
     private const CARE_MEMORY_PROMPT = <<<'PROMPT'
@@ -361,7 +384,9 @@ PROMPT;
             [['role' => 'user', 'content' => 'Écris maintenant la note de mémoire (2 phrases maximum, sujets neutres uniquement).']],
         );
 
-        $result = $this->rawCompletion($payload, 0.3, 200);
+        // La mémoire de Care était coupée en plein mot (« L'enfant a un ») : 200 jetons
+        // ne suffisent pas, le modèle consomme une part de ce budget avant d'écrire.
+        $result = $this->rawCompletion($payload, 0.3, self::CARE_MEMORY_MAX_TOKENS);
         $text = trim($result['text']);
         if ($text === '' || strtoupper(rtrim($text, '.')) === 'AUCUN') {
             $text = '';
@@ -586,7 +611,12 @@ PROMPT;
      *     CATEGORY, CONFIDENCE) du message visible, quoi qu'il arrive — y compris si le
      *     contenu de la ligne est inattendu (valeurs inconnues, pipes, scores numériques).
      *
-     * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool}
+     *  3. Extraction du RESUME courant : le modèle rend, dans le MÊME appel, un résumé
+     *     de l'échange remis à jour. Il est retiré du message visible comme les autres
+     *     lignes techniques, et permet à la session de porter à tout instant un résumé
+     *     exploitable — y compris si l'enfant disparaît sans clore sa session.
+     *
+     * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, summary:?string}
      */
     private function parseTurn(string $text): array
     {
@@ -616,11 +646,20 @@ PROMPT;
             $zone = strtolower($m[1]);
         }
 
+        // Résumé courant de l'échange — accepte RESUME comme RÉSUMÉ, sur une seule ligne.
+        $summary = null;
+        if (preg_match('/^\s*R[EÉeé]SUM[EÉeé]\s*:\s*(.+)$/miu', $text, $m)) {
+            $candidate = trim($m[1]);
+            if ($candidate !== '' && mb_strlen($candidate) >= 10) {
+                $summary = mb_substr($candidate, 0, 1000);
+            }
+        }
+
         // Phase 2 — Strip total de toute ligne tag technique du message visible.
         // Couvre les valeurs valides ET invalides (scores, pipes, listes, etc.) pour
         // garantir qu'aucun marqueur technique n'apparaisse jamais côté enfant.
         $text = preg_replace(
-            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE)\s*:.*$/mi',
+            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)\s*:.*$/miu',
             '',
             $text
         );
@@ -642,6 +681,7 @@ PROMPT;
             'alert_type'     => $alertType,
             'is_critical'    => $isCritical,
             'low_confidence' => $lowConfidence,
+            'summary'        => $summary,
         ];
     }
 
@@ -670,10 +710,18 @@ PROMPT;
 
     private function parseAnalysis(string $text): array
     {
+        // Le résumé s'arrête à la première ligne technique qui suit, RESUME comprise :
+        // le prompt système réclame désormais une ligne RESUME à la fin de CHAQUE
+        // réponse, et elle ne doit jamais se retrouver collée dans le résumé final.
         $summary = '';
-        if (preg_match('/SUMMARY:\s*(.+?)(?=\s*(?:ALERT_TYPE:|ZONE:)|$)/si', $text, $m)) {
+        if (preg_match('/SUMMARY:\s*(.+?)(?=\s*(?:ALERT_TYPE:|ZONE:|R[EÉeé]SUM[EÉeé]:)|$)/siu', $text, $m)) {
             $summary = trim($m[1]);
         }
+        $summary = trim((string) preg_replace(
+            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)\s*:.*$/miu',
+            '',
+            $summary
+        ));
 
         $alertType = null;
         if (preg_match('/ALERT_TYPE:\s*([a-z_]+)/i', $text, $m)) {

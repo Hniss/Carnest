@@ -11,6 +11,7 @@ use App\Services\FakeAIService;
 use App\Services\GeminiService;
 use App\Services\LogSmsSender;
 use App\Services\OpenAIService;
+use App\Services\UnavailableCompletionClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
@@ -81,6 +82,13 @@ class AppServiceProvider extends ServiceProvider
         $provider = $this->resolveAdjudicatorProvider();
         $model    = (string) config('services.ai.adjudicator_model');
 
+        // Aucun second fournisseur distinct réellement utilisable : on REFUSE
+        // explicitement de faire tourner le contrôle sur le fournisseur du premier
+        // passage, qui se confirmerait lui-même (spec §6.2).
+        if ($provider === null) {
+            return new UnavailableCompletionClient();
+        }
+
         if ($provider === 'anthropic') {
             return new ClaudeAIService(
                 apiKey: (string) config('services.ai.anthropic_key'),
@@ -103,8 +111,14 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Fournisseur du second passage : jamais celui du premier, repli explicite et journalisé.
+     *
+     * Rend `null` quand aucun fournisseur distinct du premier passage n'a de clé :
+     * dans ce cas la double vérification est déclarée indisponible (elle échouera et
+     * l'alerte sera marquée « à confirmer »). Elle ne retombe JAMAIS sur le
+     * fournisseur du premier passage, ni sur un fournisseur sans clé dont l'appel
+     * partirait quand même sur le réseau.
      */
-    private function resolveAdjudicatorProvider(): string
+    private function resolveAdjudicatorProvider(): ?string
     {
         // Un AI_PROVIDER inconnu retombe sur Gemini côté premier passage : même règle ici.
         $primary = (string) config('services.ai.provider', 'gemini');
@@ -116,22 +130,23 @@ class AppServiceProvider extends ServiceProvider
         $available = array_values(array_filter($others, fn (string $p) => $this->hasKeyFor($p)));
 
         if ($wanted === $primary) {
-            $fallback = $available[0] ?? $others[0];
+            $fallback = $available[0] ?? null;
             Log::warning('Adjudicateur : fournisseur identique au premier passage, repli appliqué (spec §6.2).', [
-                'demande' => $wanted, 'premier_passage' => $primary, 'retenu' => $fallback,
+                'demande' => $wanted, 'premier_passage' => $primary, 'retenu' => $fallback ?? 'aucun',
             ]);
             $wanted = $fallback;
         }
 
-        if (! $this->hasKeyFor($wanted)) {
+        if ($wanted === null || ! $this->hasKeyFor($wanted)) {
             $fallback = $available[0] ?? null;
 
             if ($fallback === null) {
-                Log::error("Adjudicateur : aucune clé configurée pour un second fournisseur — la double vérification échouera et les signaux partiront en « à confirmer ».", [
-                    'demande' => $wanted, 'premier_passage' => $primary, 'cle_attendue' => strtoupper($wanted) . '_API_KEY',
+                Log::error("Adjudicateur : aucune clé configurée pour un second fournisseur — la double vérification est déclarée indisponible et les signaux partiront en « à confirmer », jamais auto-validés par le fournisseur du premier passage.", [
+                    'demande' => $wanted ?? 'aucun', 'premier_passage' => $primary,
+                    'cle_attendue' => $wanted !== null ? strtoupper($wanted) . '_API_KEY' : null,
                 ]);
 
-                return $wanted;
+                return null;
             }
 
             Log::warning('Adjudicateur : clé absente pour le fournisseur demandé, repli explicite appliqué.', [
@@ -139,6 +154,15 @@ class AppServiceProvider extends ServiceProvider
             ]);
 
             return $fallback;
+        }
+
+        // Garde-fou final : quoi qu'il arrive, jamais le fournisseur du premier passage.
+        if ($wanted === $primary) {
+            Log::error('Adjudicateur : le repli aboutissait au fournisseur du premier passage — refusé (spec §6.2).', [
+                'premier_passage' => $primary,
+            ]);
+
+            return null;
         }
 
         return $wanted;

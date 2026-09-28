@@ -28,7 +28,11 @@ interface AIService
      * @param ?string $childContext Bloc mémoire inter-sessions injecté dans le prompt système
      *                              (#7 V5 — signaux récurrents, tendance, résumés). null = pas de mémoire.
      * @param array{hors_horaires_scolaires?: bool} $flags Indicateurs calculés côté serveur (D5 : école fermée).
-     * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, tokens:int, model:string}
+     * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, summary:?string, tokens:int, model:string}
+     *         summary = résumé COURANT de l'échange, rendu par le modèle dans le MÊME appel que la zone
+     *         et le type (aucun appel supplémentaire). Il est réécrit en entier à chaque tour et permet à
+     *         la session de porter à tout instant un résumé exploitable, même si l'enfant disparaît sans
+     *         clore sa session. null quand le modèle ne l'a pas rendu.
      *         tokens = volume de conversation du tour (réponse produite + message de l'enfant), jamais le prompt
      *         d'entrée réémis — c'est ce que mesure le plafond journalier D8.
      */

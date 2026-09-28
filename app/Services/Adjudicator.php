@@ -21,7 +21,15 @@ use App\Enums\AlertType;
  */
 class Adjudicator
 {
-    public const MAX_TOKENS = 400;
+    /**
+     * Budget de sortie du second passage.
+     *
+     * Mesuré en recette réelle (28/09) : à 400 jetons la réponse était coupée en
+     * plein JSON — « {"zone": "red", » — 3 fois sur 3, donc AUCUNE double
+     * vérification n'aboutissait et les 14 alertes de la recette portaient
+     * « À confirmer » sans un seul signal qualitatif. Complète à 800.
+     */
+    public const MAX_TOKENS = 800;
 
     private const SYSTEM_PROMPT = <<<'PROMPT'
 Tu es un classificateur indépendant. Tu ne converses pas, tu n'as pas de personnalité.

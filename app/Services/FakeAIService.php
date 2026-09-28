@@ -46,9 +46,24 @@ class FakeAIService extends GeminiService
             'alert_type'     => $type,
             'is_critical'    => $isCritical,
             'low_confidence' => false,
+            // Résumé courant : le vrai fournisseur le rend dans le même appel que la
+            // zone et le type. Le faux fournisseur en produit un équivalent pour que la
+            // session porte un résumé exploitable à tout instant, y compris en démo.
+            'summary'        => $this->runningSummary($zone),
             'tokens'         => $this->fakeTokens($messages, $message),
             'model'          => self::MODEL,
         ];
+    }
+
+    /** Résumé courant du faux fournisseur, aligné sur la zone observée. */
+    private function runningSummary(string $zone): string
+    {
+        return match ($zone) {
+            'red'    => "L'enfant a exprimé un signal grave au cours de l'échange : la conversation nécessite l'attention d'un adulte de confiance.",
+            'orange' => "L'enfant décrit une situation difficile avec d'autres personnes (moqueries ou conflit), à qualifier.",
+            'yellow' => "L'enfant exprime une inquiétude ou une fatigue passagère, sans signe de danger.",
+            default  => "Échange calme : l'enfant parle de sa journée et d'activités agréables.",
+        };
     }
 
     public function analyzeSession(array $messages, int $childAge, ?string $childGender = null): array

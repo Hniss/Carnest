@@ -17,8 +17,10 @@ class MigrationsReplayTest extends TestCase
 
     public function test_lot0_and_lot1_migrations_can_be_rolled_back_and_replayed(): void
     {
-        // 3 migrations lot 0 + 3 migrations lot 1 (000010, 000011, 000012).
-        $this->artisan('migrate:rollback', ['--step' => 6, '--force' => true])->assertExitCode(0);
+        // 3 migrations lot 0 + 3 migrations lot 1 (000010, 000011, 000012) + la migration
+        // de gravité du signal (2026_09_29_000001) ajoutée depuis, qui doit elle aussi
+        // se rejouer proprement.
+        $this->artisan('migrate:rollback', ['--step' => 7, '--force' => true])->assertExitCode(0);
         $this->assertFalse(Schema::hasColumn('children', 'birth_date'));
         $this->assertFalse(Schema::hasTable('audit_logs'));
         $this->assertFalse(Schema::hasColumn('admin_notes', 'referent_id'));
@@ -30,6 +32,9 @@ class MigrationsReplayTest extends TestCase
         $this->assertTrue(Schema::hasColumn('alerts', 'adjudication'));
         $this->assertTrue(Schema::hasColumn('chat_sessions', 'care_memory'));
         $this->assertTrue(Schema::hasTable('audit_logs'));
+        $this->assertTrue(Schema::hasColumn('chat_sessions', 'worst_alert_type'));
+        $this->assertTrue(Schema::hasColumn('chat_sessions', 'worst_level'));
+        $this->assertTrue(Schema::hasColumn('alerts', 'paged_tier'));
     }
 
     public function test_recreated_tables_keep_canonical_index_names(): void

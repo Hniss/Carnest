@@ -6,6 +6,7 @@ use App\Services\Adjudicator;
 use App\Services\ClaudeAIService;
 use App\Services\GeminiService;
 use App\Services\OpenAIService;
+use App\Services\UnavailableCompletionClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -76,13 +77,33 @@ class AdjudicatorProviderTest extends TestCase
         Log::shouldHaveReceived('warning')->once();
     }
 
-    public function test_no_second_provider_key_is_logged_as_an_error_never_silently(): void
+    /**
+     * Aucun second fournisseur utilisable : la double vérification est déclarée
+     * INDISPONIBLE. Elle ne part ni sur un client sans clé, ni — surtout — sur le
+     * fournisseur du premier passage, qui se confirmerait lui-même (spec §6.2).
+     * Le signal sera marqué « à confirmer », jamais auto-validé.
+     */
+    public function test_no_second_provider_key_refuses_to_adjudicate_instead_of_self_confirming(): void
     {
         Log::spy();
         $this->configure('gemini', 'anthropic', ['gemini' => 'g']);
 
-        $this->assertInstanceOf(ClaudeAIService::class, $this->client());
+        $client = $this->client();
+        $this->assertInstanceOf(UnavailableCompletionClient::class, $client);
+        $this->assertNotInstanceOf(GeminiService::class, $client);
         Log::shouldHaveReceived('error')->once();
+
+        $this->expectException(\RuntimeException::class);
+        $client->rawCompletion([['role' => 'user', 'content' => 'test']], 0.0, 800);
+    }
+
+    /** Même quand le fournisseur demandé EST le premier passage et qu'aucun autre n'a de clé. */
+    public function test_adjudicator_refuses_the_primary_provider_even_as_last_resort(): void
+    {
+        Log::spy();
+        $this->configure('gemini', 'gemini', ['gemini' => 'g']);
+
+        $this->assertInstanceOf(UnavailableCompletionClient::class, $this->client());
     }
 
     /** Le chemin Anthropic parle bien l'API Messages : système à part, blocs de contenu. */

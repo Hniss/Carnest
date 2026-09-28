@@ -12,7 +12,7 @@ class Alert extends Model
         'session_id', 'child_id', 'school_id',
         'type', 'level', 'status', 'notified_at',
         'summary', 'signals', 'prompt_version', 'model', 'adjudication',
-        'escalation_exhausted_at',
+        'escalation_exhausted_at', 'paged_tier',
     ];
 
     /**
@@ -25,6 +25,7 @@ class Alert extends Model
             'escalation_exhausted_at' => 'datetime',
             'summary'     => 'encrypted',
             'signals'     => 'array',
+            'paged_tier'  => 'integer',
         ];
     }
 

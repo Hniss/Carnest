@@ -12,6 +12,7 @@ class ChatSession extends Model
         'ai_summary', 'low_confidence',
         'started_at', 'ended_at', 'last_activity_at',
         'tokens_used', 'prompt_version', 'model', 'care_memory',
+        'worst_alert_type', 'worst_level',
     ];
 
     /**

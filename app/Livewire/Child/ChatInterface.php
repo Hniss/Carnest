@@ -6,11 +6,13 @@ use App\Models\Alert;
 use App\Models\ChatSession;
 use App\Models\Child;
 use App\Services\AIService;
-use App\Services\AlertPager;
+use App\Services\AlertLevelResolver;
+use App\Services\AlertUpgrader;
 use App\Services\ChildContextBuilder;
 use App\Services\CrisisDetector;
 use App\Services\GeminiService;
 use App\Services\SessionCloser;
+use App\Services\SignalSeverity;
 use App\Services\TokenBudget;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -178,8 +180,15 @@ class ChatInterface extends Component
             $deterministic['zone']
         );
 
+        // Le type suit le PIRE moment de la session, jamais le dernier message : un
+        // enfant qui parle de violence au 2e échange puis de football au 10e garde le
+        // type du signal grave. Monotone comme la zone (base fondatrice B4).
         $aiAlertType  = $aiResult['alert_type'] ?? null;
-        $alertType    = $deterministic['alert_type'] ?? $aiAlertType ?? $this->currentAlertType;
+        $alertType    = SignalSeverity::maxType(
+            $this->currentAlertType,
+            $deterministic['alert_type'] ?? null,
+            $aiAlertType,
+        );
 
         $reply = $aiResult['message'] ?? null;
         $aiFailed = $reply === null || trim($reply) === '';
@@ -241,8 +250,13 @@ class ChatInterface extends Component
             }
         }
 
-        // 5) Création d'alerte temps réel (P9, P11, P13) + paging + adjudication après réponse (lot 2).
-        $this->maybeCreateAlert($child, $aiMessages);
+        // 5) Pire moment de la session (zone + TYPE + niveau) et résumé courant scellés
+        //    en base, puis création OU mise à niveau de l'alerte (paging compris).
+        $session = $this->trackWorstSignal(
+            $aiResult['summary'] ?? null,
+            $deterministic['alert_type'] ?? $aiAlertType,
+        );
+        $this->maybeCreateOrUpgradeAlert($child, $aiMessages, $session);
 
         // 6) D8 — plafond journalier (jamais bloquant hors zone verte sans alerte).
         $this->enforceDailyCap($child);
@@ -359,38 +373,119 @@ class ChatInterface extends Component
     }
 
     /**
-     * Crée une alerte temps réel selon la zone courante (P9, P11, P13).
-     * Idempotence : la propriété Livewire $alertCreated est sérialisée côté client donc
-     * potentiellement manipulable. On double-checke côté serveur via une requête DB.
+     * Scelle en base le PIRE moment de la session et le résumé courant.
+     *
+     * Ce que le navigateur portait seul jusqu'ici — le type d'alerte et le niveau de
+     * gravité — est désormais persisté, de façon strictement monotone (jamais moins
+     * grave). C'est la condition pour que l'alerte suive la conversation, et pour
+     * qu'une session abandonnée soit analysée aussi bien qu'une session close : dès
+     * que l'enfant a disparu, plus aucun message brut n'existe (base fondatrice B5).
+     *
+     * Le résumé courant est produit par le modèle dans le MÊME appel que la zone et
+     * le type (aucun appel supplémentaire, aucune latence ajoutée).
      */
-    private function maybeCreateAlert($child, array $aiMessages = []): void
+    private function trackWorstSignal(?string $runningSummary, ?string $turnAlertType = null): ?ChatSession
     {
-        if ($this->alertCreated || ! $this->sessionId) return;
-        if (! in_array($this->currentZone, ['orange', 'red'], true)) return;
+        if (! $this->sessionId) {
+            return null;
+        }
 
-        if (Alert::where('session_id', $this->sessionId)->exists()) {
-            $this->alertCreated = true;
-            return;
+        $session = ChatSession::find($this->sessionId);
+        if (! $session) {
+            return null;
         }
 
         try {
-            $level = $this->currentZone === 'red'
-                ? 'critical'
-                : app(\App\Services\AlertLevelResolver::class)->resolve(
-                    $this->currentAlertType,
-                    $this->currentZone,
-                    collect($this->messages)->where('role', 'user')->pluck('content')->all()
+            // Le niveau est calculé pour CHAQUE type lu à ce tour, puis on garde le pire.
+            // Indispensable : le classement des types et celui des niveaux ne coïncident
+            // pas. `humiliation_adulte` pèse moins que `harcelement` dans l'ordre des
+            // types, mais il vaut +2 facteurs dans le calcul du niveau (base B6 : une
+            // humiliation par un adulte de l'école est orange minimum). Ne résoudre le
+            // niveau que sur le type retenu ferait perdre ce +2, et donc la notification.
+            $level = null;
+            if (in_array($this->currentZone, ['orange', 'red'], true)) {
+                $userContents = collect($this->messages)->where('role', 'user')->pluck('content')->all();
+                $resolver = app(AlertLevelResolver::class);
+
+                foreach (array_unique(array_filter([$this->currentAlertType, $turnAlertType])) as $candidate) {
+                    $level = SignalSeverity::maxLevel($level, $resolver->resolve($candidate, $this->currentZone, $userContents));
+                }
+                if ($level === null) {
+                    $level = $resolver->resolve(null, $this->currentZone, $userContents);
+                }
+            }
+
+            $updates = [];
+
+            $worstType = SignalSeverity::maxType($session->worst_alert_type, $this->currentAlertType);
+            if ($worstType !== null && $worstType !== $session->worst_alert_type) {
+                $updates['worst_alert_type'] = $worstType;
+            }
+
+            $worstLevel = SignalSeverity::maxLevel($session->worst_level, $level);
+            if ($worstLevel !== null && $worstLevel !== $session->worst_level) {
+                $updates['worst_level'] = $worstLevel;
+            }
+
+            $runningSummary = $runningSummary !== null ? trim($runningSummary) : '';
+            if ($runningSummary !== '') {
+                $updates['ai_summary'] = $runningSummary;
+            }
+
+            if ($updates !== []) {
+                $session->fill($updates)->save();
+            }
+        } catch (\Throwable $e) {
+            Log::error('Worst signal tracking failed', ['session' => $this->sessionId, 'error' => $e->getMessage()]);
+        }
+
+        return $session;
+    }
+
+    /**
+     * Crée l'alerte temps réel selon la zone courante (P9, P11, P13), ou MET À NIVEAU
+     * celle qui existe déjà quand la conversation est devenue plus grave.
+     *
+     * Défaut corrigé (recette du 28/09, B1 et B2) : l'alerte était figée sur le premier
+     * signal. « ça va pas trop » créait une alerte « détresse / modérée », et
+     * « j'aimerais juste disparaître » trois messages plus tard ne la changeait pas —
+     * donc personne n'était prévenu. Désormais le type et le niveau montent avec la
+     * conversation et la chaîne de notification est relancée sur le palier nouvellement
+     * atteint (jamais deux fois le même palier : AlertPager s'appuie sur `paged_tier`).
+     *
+     * Idempotence : la propriété Livewire $alertCreated est sérialisée côté client donc
+     * potentiellement manipulable. On double-checke côté serveur via une requête DB.
+     */
+    private function maybeCreateOrUpgradeAlert($child, array $aiMessages = [], ?ChatSession $session = null): void
+    {
+        if (! $this->sessionId) return;
+
+        try {
+            $session = $session ?? ChatSession::find($this->sessionId);
+            $existing = Alert::where('session_id', $this->sessionId)->orderBy('id')->first();
+
+            if ($existing !== null) {
+                $this->alertCreated = true;
+                app(AlertUpgrader::class)->sync(
+                    $existing,
+                    $session?->worst_alert_type,
+                    $session?->worst_level,
+                    $session?->ai_summary,
                 );
 
-            // D10 (v3) — summary = résumé IA de la session s'il existe déjà (chiffré au
-            // repos), version de prompt et modèle pour la traçabilité de l'alerte.
-            $session = ChatSession::find($this->sessionId);
+                return;
+            }
+
+            if (! in_array($this->currentZone, ['orange', 'red'], true)) return;
+
+            // D10 (v3) — summary = résumé courant de la session (chiffré au repos) : une
+            // alerte ne part plus jamais avec « Aucun résumé disponible pour ce signal ».
             $alert = Alert::create([
                 'session_id'     => $this->sessionId,
                 'child_id'       => $child->id,
                 'school_id'      => $child->school_id,
-                'type'           => $this->currentAlertType ?? 'detresse',
-                'level'          => $level,
+                'type'           => $session?->worst_alert_type ?? $this->currentAlertType ?? 'detresse',
+                'level'          => $session?->worst_level ?? SignalSeverity::levelFromZone($this->currentZone),
                 'summary'        => $session?->ai_summary,
                 'prompt_version' => $session?->prompt_version ?? GeminiService::PROMPT_VERSION,
                 'model'          => $session?->model,
@@ -398,11 +493,7 @@ class ChatInterface extends Component
             $this->alertCreated = true;
 
             // Lot 2 §2 — paging immédiat (référent, administration si vital).
-            try {
-                app(AlertPager::class)->page($alert);
-            } catch (\Throwable $e) {
-                Log::error('Alert paging failed', ['alert' => $alert->id, 'error' => $e->getMessage()]);
-            }
+            app(AlertUpgrader::class)->page($alert);
 
             // Lot 2 §1 — double vérification APRÈS la réponse à l'enfant, historique en
             // mémoire uniquement (jamais sérialisé dans une file ni en base).

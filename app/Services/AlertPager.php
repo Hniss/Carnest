@@ -20,7 +20,10 @@ use Illuminate\Support\Facades\Mail;
 /**
  * Lot 2 §2 — paging et escalade des alertes (`alert_notifications`).
  *
- * page()     : à la création d'une alerte high / critical ou de type vital.
+ * page()     : à la création d'une alerte high / critical ou de type vital, ET à
+ *              chaque fois qu'une alerte ouverte est relevée (AlertUpgrader). Le
+ *              palier déjà servi est mémorisé sur `alerts.paged_tier` : un palier
+ *              n'est jamais notifié deux fois.
  * escalate() : exécuté chaque minute (`carenest:escalate-alerts`). Le temps écoulé
  *              se compte en HEURES OUVRÉES de l'école pour les alertes non vitales
  *              (BusinessTime, lundi-vendredi), en continu 24h/24 pour les vitales.
@@ -48,17 +51,44 @@ class AlertPager
 
     // ── Paging initial ────────────────────────────────────────────────────
 
-    public function page(Alert $alert): void
-    {
-        $type  = AlertType::tryFrom((string) $alert->type);
-        $vital = $type?->isVital() ?? false;
+    /** Palier de notification : 0 = personne, 1 = référent, 2 = chaîne vitale complète. */
+    public const TIER_NONE     = 0;
+    public const TIER_REFERENT = 1;
+    public const TIER_VITAL    = 2;
 
-        if (! $vital && ! in_array($alert->level, ['high', 'critical'], true)) {
-            return;
+    /**
+     * Palier que MÉRITE une alerte, d'après sa seule nature (type vital, niveau).
+     *
+     * C'est ici, et nulle part ailleurs, que vit la politique « qui est notifié pour
+     * quel niveau ». Elle est inchangée : type vital → chaîne complète ; niveau
+     * élevé ou critique non vital → référent ; le reste → personne.
+     */
+    public static function tierFor(Alert $alert): int
+    {
+        if (AlertType::tryFrom((string) $alert->type)?->isVital() ?? false) {
+            return self::TIER_VITAL;
         }
 
-        // Idempotence : un seul paging initial (step 0, canal app) par alerte.
-        if (AlertNotification::where('alert_id', $alert->id)->where('escalation_step', 0)->where('channel', 'app')->exists()) {
+        return in_array($alert->level, ['high', 'critical'], true)
+            ? self::TIER_REFERENT
+            : self::TIER_NONE;
+    }
+
+    /**
+     * Émet ce qui manque entre le palier déjà servi (`alerts.paged_tier`) et le
+     * palier mérité aujourd'hui.
+     *
+     * Appelable autant de fois qu'on veut : chaque palier n'est servi qu'une fois
+     * (`paged_tier` est monotone). Une alerte relevée en cours de session déclenche
+     * donc uniquement les canaux du ou des paliers nouvellement atteints — jamais
+     * un doublon sur un palier déjà servi.
+     */
+    public function page(Alert $alert): void
+    {
+        $tier   = self::tierFor($alert);
+        $served = (int) ($alert->paged_tier ?? self::TIER_NONE);
+
+        if ($tier <= $served) {
             return;
         }
 
@@ -67,23 +97,50 @@ class AlertPager
         $delegate = $school ? $this->activeDelegate($school) : null;
         $link     = '/dashboard-referent/alertes/' . $alert->id;
 
-        if ($referent) {
+        // `paged_tier` n'enregistre QUE ce qui a réellement été délivré, et il est
+        // enregistré palier par palier : un échec sur le palier vital ne doit pas faire
+        // renotifier le palier référent au tour suivant, et une école sans référent ne
+        // doit pas voir un palier marqué servi alors que rien n'est parti.
+        $reached = $served;
+
+        if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT && $referent) {
             $this->notifyApp($alert, $referent, 0, 'alerte', 'Une alerte attend votre accusé', 'Un signal vient d\'être détecté. Prenez-en connaissance dans votre espace référent.', $link);
             $this->sendEmail($alert, $referent, 0);
+            $reached = $this->markServed($alert, $reached, self::TIER_REFERENT);
         }
 
-        if ($vital) {
+        if ($tier >= self::TIER_VITAL && $served < self::TIER_VITAL) {
+            $delivered = false;
             if ($referent) {
                 $this->sendSms($alert, $referent, 0, $school?->setting?->referent_phone ?: $referent->phone);
+                $delivered = true;
             }
             if ($delegate) {
                 $this->notifyApp($alert, $delegate, 0, 'alerte', 'Une alerte attend un accusé (délégation)', 'Un signal vital vient d\'être détecté. Le référent titulaire est également prévenu.', $link);
                 $this->sendSms($alert, $delegate, 0, $delegate->phone);
+                $delivered = true;
             }
             if ($school) {
                 $this->notifyAdmins($alert, $school, 0, 'admin.vital.notify');
+                $delivered = true;
+            }
+            if ($delivered) {
+                $this->markServed($alert, $reached, self::TIER_VITAL);
             }
         }
+    }
+
+    /** Enregistre un palier comme servi, sans jamais redescendre. */
+    private function markServed(Alert $alert, int $current, int $tier): int
+    {
+        if ($tier <= $current) {
+            return $current;
+        }
+
+        $alert->paged_tier = $tier;
+        $alert->save();
+
+        return $tier;
     }
 
     // ── Escalade ──────────────────────────────────────────────────────────
