@@ -2,35 +2,43 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
 use Tests\TestCase;
 
+/**
+ * L'inscription publique est fermée (correction du 2026-10-02).
+ *
+ * Faille : la page /register était ouverte aux visiteurs et la colonne users.role valait
+ * « admin » par défaut — toute personne qui s'inscrivait devenait administrateur. Aucun
+ * parcours légitime n'en dépendait : les comptes du référent et de l'administration sont
+ * créés depuis l'écran Comptes de l'administration, les comptes parents par
+ * ParentAccountProvisioner, les élèves par l'administration.
+ */
 class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registration_screen_can_be_rendered(): void
+    public function test_a_visitor_cannot_open_a_registration_page(): void
     {
-        $response = $this->get('/register');
+        $this->get('/register')->assertNotFound();
 
-        $response
-            ->assertOk()
-            ->assertSeeVolt('pages.auth.register');
+        $this->assertSame(0, User::count());
     }
 
-    public function test_new_users_can_register(): void
+    public function test_the_home_page_offers_no_way_to_register(): void
     {
-        $component = Volt::test('pages.auth.register')
-            ->set('name', 'Test User')
-            ->set('email', 'test@example.com')
-            ->set('password', 'password')
-            ->set('password_confirmation', 'password');
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('/register')
+            ->assertDontSee('Register');
+    }
 
-        $component->call('register');
-
-        $component->assertRedirect(route('dashboard', absolute: false));
-
-        $this->assertAuthenticated();
+    public function test_the_adult_login_page_offers_no_way_to_register(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertDontSee('/register')
+            ->assertDontSee('Register');
     }
 }

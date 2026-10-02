@@ -18,7 +18,7 @@ use Tests\TestCase;
  *
  * Couvre :
  *  - welcome personnalisé par prénom + variante « de te revoir » pour un récurrent
- *  - childContext null au 1er passage, non-null avec historique
+ *  - aucune mémoire transmise au modèle au 1er passage, une mémoire avec historique
  *  - le bloc mémoire est bien transmis à AIService::chat()
  *  - #3 : réponse courte « rien » → relance neutre, jamais d'escalade
  */
@@ -52,13 +52,30 @@ class ChatInterfaceMemoryTest extends TestCase
         $session->save();
     }
 
+    /** Mémoire transmise au modèle au premier tour (l'état interne du chat n'est plus public). */
+    private function contextSentToModel(): ?string
+    {
+        $captured = ['context' => 'non appelé'];
+        $mock = Mockery::mock(AIService::class);
+        $mock->shouldReceive('chat')->andReturnUsing(function ($messages, $age, $gender, $context = null) use (&$captured) {
+            $captured['context'] = $context;
+
+            return ['message' => 'Je t\'écoute.', 'zone' => 'green', 'alert_type' => null, 'is_critical' => false, 'low_confidence' => false];
+        });
+        $this->app->instance(AIService::class, $mock);
+
+        Livewire::test(ChatInterface::class)->set('input', 'salut')->call('sendMessage')->call('fetchReply');
+
+        return $captured['context'];
+    }
+
     public function test_first_session_has_null_context_and_plain_welcome(): void
     {
         $this->loginChild();
 
         $component = Livewire::test(ChatInterface::class);
 
-        $this->assertNull($component->get('childContext'));
+        $this->assertNull($this->contextSentToModel());
         $messages = $component->get('messages');
         $this->assertStringContainsString('Yassine', $messages[0]['content']);
         // 1er passage → pas la variante « de te revoir ».
@@ -72,7 +89,7 @@ class ChatInterfaceMemoryTest extends TestCase
 
         $component = Livewire::test(ChatInterface::class);
 
-        $this->assertNotNull($component->get('childContext'));
+        $this->assertNotNull($this->contextSentToModel());
         $messages = $component->get('messages');
         $this->assertStringContainsString('Yassine', $messages[0]['content']);
         $this->assertStringContainsString('revoir', $messages[0]['content']);
@@ -123,7 +140,7 @@ class ChatInterfaceMemoryTest extends TestCase
             ->call('sendMessage')
             ->call('fetchReply');
 
-        $this->assertSame('green', $component->get('currentZone'));
+        $this->assertSame('green', ChatSession::find($component->get('sessionId'))->zone);
         $messages = $component->get('messages');
         $reply = end($messages);
         // Relance neutre à choix simples — pas de ton de détresse.

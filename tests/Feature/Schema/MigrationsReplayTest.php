@@ -19,8 +19,8 @@ class MigrationsReplayTest extends TestCase
     {
         // 3 migrations lot 0 + 3 migrations lot 1 (000010, 000011, 000012) + la migration
         // de gravité du signal (2026_09_29_000001) ajoutée depuis, qui doit elle aussi
-        // se rejouer proprement.
-        $this->artisan('migrate:rollback', ['--step' => 7, '--force' => true])->assertExitCode(0);
+        // se rejouer proprement, + le retrait du rôle par défaut (2026_10_02_000001).
+        $this->artisan('migrate:rollback', ['--step' => 8, '--force' => true])->assertExitCode(0);
         $this->assertFalse(Schema::hasColumn('children', 'birth_date'));
         $this->assertFalse(Schema::hasTable('audit_logs'));
         $this->assertFalse(Schema::hasColumn('admin_notes', 'referent_id'));
@@ -35,6 +35,8 @@ class MigrationsReplayTest extends TestCase
         $this->assertTrue(Schema::hasColumn('chat_sessions', 'worst_alert_type'));
         $this->assertTrue(Schema::hasColumn('chat_sessions', 'worst_level'));
         $this->assertTrue(Schema::hasColumn('alerts', 'paged_tier'));
+        $role = collect(Schema::getColumns('users'))->firstWhere('name', 'role');
+        $this->assertNull($role['default'], 'Rejouée, la colonne users.role ne doit retrouver aucune valeur par défaut.');
     }
 
     public function test_recreated_tables_keep_canonical_index_names(): void

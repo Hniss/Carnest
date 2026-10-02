@@ -26,10 +26,13 @@ class PostLoginRedirectTest extends TestCase
     use CreatesRoles;
     use RefreshDatabase;
 
-    /** L'utilisateur déconnecté ouvre une adresse protégée : Laravel la mémorise. */
+    /**
+     * L'utilisateur déconnecté ouvre une adresse protégée : Laravel la mémorise. L'espace
+     * élève renvoie vers la connexion élève, le reste vers la connexion des adultes.
+     */
     private function visitWhileLoggedOut(string $path): void
     {
-        $this->get($path)->assertRedirect('/login');
+        $this->get($path)->assertRedirect(str_starts_with($path, '/chat') ? '/child/login' : '/login');
         $this->assertNotNull(session('url.intended'));
     }
 

@@ -79,12 +79,6 @@
                     <div class="text-brand-800 font-mono">yassine@carenest.ma</div>
                 </div>
             </div>
-
-            <div class="text-center mt-5">
-                <a href="{{ route('login') }}" class="text-xs text-stone-500 hover:text-brand-700 transition-colors">
-                    Espace administrateur →
-                </a>
-            </div>
         </div>
     </div>
 

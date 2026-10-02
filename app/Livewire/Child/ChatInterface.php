@@ -15,6 +15,8 @@ use App\Services\SessionCloser;
 use App\Services\SignalSeverity;
 use App\Services\TokenBudget;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
@@ -39,20 +41,33 @@ class ChatInterface extends Component
         "C'était chouette de discuter avec toi. À demain, prends soin de toi.",
     ];
 
+    /** Mémoire de Care gardée côté serveur : une entrée chiffrée par élève (cache applicatif). */
+    private const MEMORY_CACHE_PREFIX = 'chat-memoire:';
+    private const MEMORY_CACHE_HOURS = 12;
+
     public array $messages = [];
     public string $input = '';
     public bool $isTyping = false;
     public bool $sessionClosed = false;
     public ?int $sessionId = null;
 
-    /** Pire zone atteinte au cours de la session (max running). */
-    public string $currentZone = 'green';
+    /*
+     * État interne de la conversation — JAMAIS public (correction du 2026-10-02). Une
+     * propriété publique part dans le code de la page et dans chaque réponse réseau :
+     * l'enfant y lisait la pire zone, le type de signal, l'existence d'une alerte et la
+     * mémoire de Care. Contrainte produit (Hamza) : l'enfant ne doit pas comprendre que
+     * Care partage la situation avec les parents et les référents. Ces valeurs sont
+     * relues côté serveur à chaque requête (hydrate()).
+     */
 
-    /** Type d'alerte courant (priorité au plus récent typé). */
-    public ?string $currentAlertType = null;
+    /** Pire zone atteinte au cours de la session (max running) — relue sur chat_sessions.zone. */
+    private string $currentZone = 'green';
 
-    /** Indique si une alerte temps réel a déjà été créée pour la session (idempotence). */
-    public bool $alertCreated = false;
+    /** Type du pire moment de la session — relu sur chat_sessions.worst_alert_type. */
+    private ?string $currentAlertType = null;
+
+    /** Une alerte existe déjà pour la session (idempotence) — relu sur la table alerts. */
+    private bool $alertCreated = false;
 
     /**
      * Compteur d'échecs IA consécutifs (Gemini 503, timeout, parse vide).
@@ -72,8 +87,31 @@ class ChatInterface extends Component
      * #7 (V5) — Bloc mémoire inter-sessions injecté dans le prompt système IA.
      * Construit une seule fois au mount à partir des données déjà persistées
      * (résumés, zones, alertes — jamais de message brut). null = 1er passage.
+     * Gardé chiffré côté serveur entre deux requêtes (keepMemory / recallMemory).
      */
-    public ?string $childContext = null;
+    private ?string $childContext = null;
+
+    /**
+     * Requêtes suivant le premier affichage : l'état interne est relu côté serveur — pire
+     * zone et pire type sur la session en base (scellés à chaque tour), existence d'une
+     * alerte sur la table des alertes, mémoire de Care dans le cache applicatif. Rien de
+     * tout cela ne transite par le navigateur, qui ne peut donc ni le lire ni le modifier.
+     */
+    public function hydrate(): void
+    {
+        $child = Auth::guard('child')->user();
+        $session = ($child !== null && $this->sessionId !== null)
+            ? ChatSession::query()
+                ->whereKey($this->sessionId)
+                ->where('child_id', $child->id)
+                ->first(['id', 'zone', 'worst_alert_type'])
+            : null;
+
+        $this->currentZone      = $session?->zone ?? 'green';
+        $this->currentAlertType = $session?->worst_alert_type;
+        $this->alertCreated     = $session !== null && Alert::where('session_id', $session->id)->exists();
+        $this->childContext     = $child !== null ? $this->recallMemory($child) : null;
+    }
 
     public function mount(): void
     {
@@ -96,6 +134,46 @@ class ChatInterface extends Component
             'last_activity_at' => now(),
         ]);
         $this->sessionId = $session->id;
+
+        $this->keepMemory($child);
+    }
+
+    /**
+     * La mémoire de Care de l'ouverture du chat reste la même à chaque tour : elle est gardée
+     * telle quelle (jamais reconstruite en cours de conversation, où l'alerte du jour
+     * entrerait dans les « échanges précédents »). Chiffrée : elle porte les thèmes des
+     * signaux passés. Un échec du cache ne bloque jamais le chat — Care continue sans mémoire.
+     */
+    private function keepMemory(Child $child): void
+    {
+        try {
+            Cache::put(
+                self::MEMORY_CACHE_PREFIX . $child->id,
+                Crypt::encryptString(json_encode(['memoire' => $this->childContext])),
+                now()->addHours(self::MEMORY_CACHE_HOURS),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Chat memory not kept', ['session' => $this->sessionId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function recallMemory(Child $child): ?string
+    {
+        try {
+            $stored = Cache::get(self::MEMORY_CACHE_PREFIX . $child->id);
+            if (! is_string($stored)) {
+                Log::warning('Chat memory missing', ['session' => $this->sessionId]);
+
+                return null;
+            }
+            $memory = json_decode(Crypt::decryptString($stored), true)['memoire'] ?? null;
+
+            return is_string($memory) ? $memory : null;
+        } catch (\Throwable $e) {
+            Log::warning('Chat memory unreadable', ['session' => $this->sessionId, 'error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     public function sendMessage(): void
@@ -458,8 +536,8 @@ class ChatInterface extends Component
      * conversation et la chaîne de notification est relancée sur le palier nouvellement
      * atteint (jamais deux fois le même palier : AlertPager s'appuie sur `paged_tier`).
      *
-     * Idempotence : la propriété Livewire $alertCreated est sérialisée côté client donc
-     * potentiellement manipulable. On double-checke côté serveur via une requête DB.
+     * Idempotence : l'existence d'une alerte est relue en base à chaque appel (requête
+     * ci-dessous), jamais déduite d'une valeur venue du navigateur.
      */
     private function maybeCreateOrUpgradeAlert($child, array $aiMessages = [], ?ChatSession $session = null): void
     {

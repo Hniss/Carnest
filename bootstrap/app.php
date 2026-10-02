@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,6 +26,19 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Lot 1 — un utilisateur déjà connecté qui ouvre /login est renvoyé vers SON espace (pas /dashboard).
         $middleware->redirectUsersTo(fn () => auth()->user()?->homePath() ?? '/dashboard');
+
+        // Un élève déconnecté qui ouvre une page de l'espace élève (garde « child ») revient
+        // sur la connexion élève, jamais sur celle des adultes (correction du 2026-10-02).
+        $middleware->redirectGuestsTo(function (Request $request) {
+            foreach ($request->route()?->gatherMiddleware() ?? [] as $guarded) {
+                if (is_string($guarded) && str_starts_with($guarded, 'auth:')
+                    && in_array('child', explode(',', substr($guarded, 5)), true)) {
+                    return route('child.login');
+                }
+            }
+
+            return route('login');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

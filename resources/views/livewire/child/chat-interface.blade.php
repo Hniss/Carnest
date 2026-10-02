@@ -137,30 +137,36 @@
     @endif
 </div>
 
+{{--
+    Script du chat — les commentaires vivent ICI, en commentaire Blade, jamais dans le
+    <script> : ce qui est écrit dans le script part dans le navigateur de l'enfant, et ne doit
+    rien lui apprendre du fonctionnement (correction du 2026-10-02).
+
+    - Le bloc entier est UNE expression (fonction auto-exécutée) : Alpine le compile en
+      « __self.result = contenu » ; un contenu qui commence par une déclaration const est une
+      erreur de syntaxe et tout le bloc est abandonné sans bruit (cause du focus jamais rendu,
+      constatée le 2026-10-02). Ne rien écrire hors de cette fonction.
+    - #4 (V5) — défilement automatique : tout ajout dans #messages (réponse, indicateur de
+      saisie) fait défiler en bas, quel que soit le moment où Livewire met la page à jour.
+    - #5 (V5) — le curseur revient dans la case après chaque envoi et chaque réponse de Care.
+    - #1 (V5) — fermeture ou actualisation de la fenêtre sans « J'ai fini ma session » :
+      la session est clôturée par navigator.sendBeacon (POST /chat/close, contrôle
+      d'appartenance côté serveur), une seule fois.
+--}}
 @script
 <script>
-    // Le bloc entier est UNE expression (fonction auto-exécutée) : Alpine compile ce bloc
-    // en « __self.result = contenu » ; un contenu qui commence par un commentaire puis
-    // une déclaration const est une erreur de syntaxe et tout le bloc est abandonné sans
-    // bruit (cause du focus jamais rendu, constatée le 2026-10-02). Ne rien écrire hors
-    // de cette fonction.
     (() => {
-    // JS scopé au composant Livewire ($wire dispo). On gère ici trois retours
-    // de tests V5 : auto-scroll (#4), focus input (#5), beacon de clôture (#1).
     const messagesEl = document.getElementById('messages');
     const scrollDown = () => requestAnimationFrame(() => {
         if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
     });
 
-    // #4 — Auto-scroll fiable : tout ajout de nœud (réponse IA, indicateur de
-    // saisie) déclenche un scroll en bas. Couvre le timing de morph Livewire.
     if (messagesEl) {
         new MutationObserver(scrollDown).observe(messagesEl, { childList: true, subtree: true });
         scrollDown();
     }
     $wire.on('scroll-bottom', scrollDown);
 
-    // #5 — Focus rendu à l'enfant après chaque envoi et après chaque réponse de Care.
     $wire.on('focus-input', () => {
         requestAnimationFrame(() => {
             const input = document.querySelector('[data-chat-input]');
@@ -168,8 +174,6 @@
         });
     });
 
-    // #1 — Fermeture/actualisation de fenêtre sans « Fin de session » : on
-    // clôture la session via beacon (résumé + alerte préservés). Anti-double-envoi.
     let beaconSent = false;
     const sendClose = () => {
         if (beaconSent) return;

@@ -617,20 +617,32 @@ PROMPT;
     }
 
     /**
+     * Début d'une ligne technique du protocole de fin de réponse, y compris mise en forme
+     * (« **RESUME:** », « ## ZONE : »). Sa première occurrence ferme le texte vu par l'enfant.
+     */
+    private const TECHNICAL_LINE = '/^[ \t]*[*_#>`]*[ \t]*(?:ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)[*_`]*[ \t]*:/miu';
+
+    /**
      * Parse une réponse de tour : extrait [ALERTE_CRITIQUE], ALERT_TYPE, ZONE et nettoie le message.
      *
      * P4 (Probleme CareNest V4) : passe en deux phases.
      *  1. Extraction stricte des valeurs ALERT_TYPE / ZONE si elles matchent le format autorisé.
      *     Pour ALERT_TYPE multi-valeurs séparées par |, on prend le PREMIER alert_type valide
      *     (ex. "detresse|isolement" -> "detresse").
-     *  2. Strip TOTAL de toute ligne tag technique (ALERT_TYPE, ZONE, RISK_LEVEL, SCORE,
-     *     CATEGORY, CONFIDENCE) du message visible, quoi qu'il arrive — y compris si le
-     *     contenu de la ligne est inattendu (valeurs inconnues, pipes, scores numériques).
+     *  2. Le message visible s'arrête à la PREMIÈRE ligne technique (ALERT_TYPE, ZONE, RESUME,
+     *     RISK_LEVEL, SCORE, CATEGORY, CONFIDENCE, SUMMARY), quel que soit son contenu (valeurs
+     *     inconnues, pipes, scores numériques) et même mise en forme (gras, titre). Tout ce que
+     *     le modèle écrit ensuite est retiré de l'affichage (correction du 2026-10-02) : le
+     *     modèle continue parfois après sa ligne RESUME — réponse répétée, question en double,
+     *     résumé sur plusieurs lignes dont la suite aurait été lue par l'enfant.
      *
      *  3. Extraction du RESUME courant : le modèle rend, dans le MÊME appel, un résumé
      *     de l'échange remis à jour. Il est retiré du message visible comme les autres
      *     lignes techniques, et permet à la session de porter à tout instant un résumé
      *     exploitable — y compris si l'enfant disparaît sans clore sa session.
+     *
+     *  Les phases 1 et 3 lisent le texte COMPLET : le serveur exploite toujours la zone,
+     *  le type et le résumé, même écrits après la coupure.
      *
      * @return array{message:string, zone:string, alert_type:?string, is_critical:bool, low_confidence:bool, summary:?string}
      */
@@ -671,14 +683,11 @@ PROMPT;
             }
         }
 
-        // Phase 2 — Strip total de toute ligne tag technique du message visible.
-        // Couvre les valeurs valides ET invalides (scores, pipes, listes, etc.) pour
-        // garantir qu'aucun marqueur technique n'apparaisse jamais côté enfant.
-        $text = preg_replace(
-            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)\s*:.*$/miu',
-            '',
-            $text
-        );
+        // Phase 2 — Le message visible s'arrête à la première ligne technique : rien de ce
+        // qui la suit n'arrive à l'enfant (résumé destiné aux adultes, réponse répétée...).
+        if (preg_match(self::TECHNICAL_LINE, $text, $m, PREG_OFFSET_CAPTURE)) {
+            $text = substr($text, 0, $m[0][1]);
+        }
 
         $lowConfidence = $zone === null;
         if ($zone === null) {
