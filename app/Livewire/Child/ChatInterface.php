@@ -14,12 +14,14 @@ use App\Services\GeminiService;
 use App\Services\SessionCloser;
 use App\Services\SignalSeverity;
 use App\Services\TokenBudget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('layouts.child')]
@@ -49,6 +51,12 @@ class ChatInterface extends Component
     public string $input = '';
     public bool $isTyping = false;
     public bool $sessionClosed = false;
+
+    /**
+     * Numéro de la session du chat, fixé à l'ouverture — verrouillé : le navigateur peut le lire
+     * (clôture à la fermeture de la fenêtre) mais toute tentative de le modifier est rejetée.
+     */
+    #[Locked]
     public ?int $sessionId = null;
 
     /*
@@ -100,12 +108,7 @@ class ChatInterface extends Component
     public function hydrate(): void
     {
         $child = Auth::guard('child')->user();
-        $session = ($child !== null && $this->sessionId !== null)
-            ? ChatSession::query()
-                ->whereKey($this->sessionId)
-                ->where('child_id', $child->id)
-                ->first(['id', 'zone', 'worst_alert_type'])
-            : null;
+        $session = $this->ownSession()->first(['id', 'zone', 'worst_alert_type']);
 
         $this->currentZone      = $session?->zone ?? 'green';
         $this->currentAlertType = $session?->worst_alert_type;
@@ -136,6 +139,34 @@ class ChatInterface extends Component
         $this->sessionId = $session->id;
 
         $this->keepMemory($child);
+    }
+
+    /**
+     * La session du chat, bornée à l'élève connecté : toute lecture et toute écriture de la
+     * session passe par ici, si bien qu'une session qui n'est pas la sienne n'est jamais lue
+     * ni écrite, quel que soit le numéro reçu.
+     */
+    private function ownSession(): Builder
+    {
+        return ChatSession::query()
+            ->whereKey($this->sessionId)
+            ->where('child_id', Auth::guard('child')->id());
+    }
+
+    /**
+     * Refuse l'action quand la session du chat n'appartient pas à l'élève connecté (page restée
+     * ouverte sur un poste partagé après la connexion d'un autre élève, numéro falsifié) :
+     * rien n'est écrit, l'incident est journalisé avec la seule action refusée — aucune donnée
+     * d'élève (ni identifiant, ni nom, ni message, ni résumé, ni zone).
+     */
+    private function refuseForeignSession(string $action): void
+    {
+        if ($this->ownSession()->exists()) {
+            return;
+        }
+
+        Log::warning('Chat session ownership refused', ['action' => $action]);
+        abort(403);
     }
 
     /**
@@ -178,6 +209,8 @@ class ChatInterface extends Component
 
     public function sendMessage(): void
     {
+        $this->refuseForeignSession('sendMessage');
+
         // La case d'écriture reste active pendant que Care répond (le curseur n'en sort
         // jamais) : seul l'envoi attend la réponse. Le texte préparé est conservé.
         if ($this->isTyping) return;
@@ -207,7 +240,7 @@ class ChatInterface extends Component
         // On ne stocke JAMAIS le contenu du message — uniquement le timestamp
         // et la pire zone observée à ce stade.
         if ($this->sessionId) {
-            ChatSession::whereKey($this->sessionId)->update([
+            $this->ownSession()->update([
                 'last_activity_at' => now(),
                 'zone'             => $this->currentZone,
             ]);
@@ -219,6 +252,8 @@ class ChatInterface extends Component
 
     public function fetchReply(): void
     {
+        $this->refuseForeignSession('fetchReply');
+
         if (! $this->isTyping) return;
 
         $child = Auth::guard('child')->user();
@@ -311,7 +346,7 @@ class ChatInterface extends Component
         // pire zone observée, low_confidence selon résultat IA. Permet au job
         // CloseIdleSessions de finaliser proprement une session abandonnée.
         if ($this->sessionId) {
-            ChatSession::whereKey($this->sessionId)->update([
+            $this->ownSession()->update([
                 'last_activity_at' => now(),
                 'zone'             => $this->currentZone,
                 'low_confidence'   => $aiResult['low_confidence'] ?? false,
@@ -322,7 +357,7 @@ class ChatInterface extends Component
             // message de l'enfant) ; le prompt système réémis à chaque appel n'est
             // jamais compté (voir GeminiService::conversationTokens()).
             if ($aiResult !== null) {
-                ChatSession::whereKey($this->sessionId)->increment(
+                $this->ownSession()->increment(
                     'tokens_used',
                     max(0, (int) ($aiResult['tokens'] ?? 0)),
                     [
@@ -389,7 +424,7 @@ class ChatInterface extends Component
                 'content' => self::CAP_CLOSING_MESSAGES[array_rand(self::CAP_CLOSING_MESSAGES)],
             ];
 
-            $session = ChatSession::find($this->sessionId);
+            $session = $this->ownSession()->first();
             if ($session) {
                 $result = app(SessionCloser::class)->close(
                     $session,
@@ -427,10 +462,12 @@ class ChatInterface extends Component
 
     public function endSession(): void
     {
+        $this->refuseForeignSession('endSession');
+
         if ($this->sessionClosed || ! $this->sessionId) return;
 
         $child = Auth::guard('child')->user();
-        $session = ChatSession::find($this->sessionId);
+        $session = $this->ownSession()->first();
         if (! $session) return;
 
         // V5 : logique de clôture mutualisée avec le beacon de fermeture de fenêtre
@@ -473,7 +510,7 @@ class ChatInterface extends Component
             return null;
         }
 
-        $session = ChatSession::find($this->sessionId);
+        $session = $this->ownSession()->first();
         if (! $session) {
             return null;
         }
@@ -544,7 +581,7 @@ class ChatInterface extends Component
         if (! $this->sessionId) return;
 
         try {
-            $session = $session ?? ChatSession::find($this->sessionId);
+            $session = $session ?? $this->ownSession()->first();
             $existing = Alert::where('session_id', $this->sessionId)->orderBy('id')->first();
 
             if ($existing !== null) {

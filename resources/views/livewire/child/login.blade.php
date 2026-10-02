@@ -15,7 +15,7 @@
         <div class="absolute top-[-80px] left-[-80px] w-[360px] h-[360px] rounded-full bg-brand-400/15 blur-3xl" aria-hidden="true"></div>
         <div class="absolute bottom-[-100px] right-[-60px] w-[400px] h-[400px] rounded-full bg-brand-300/10 blur-3xl" aria-hidden="true"></div>
 
-        <a href="/" class="relative inline-flex items-center">
+        <a href="{{ route('child.login') }}" class="relative inline-flex items-center">
             <x-carenest-logo variant="full-white" class="h-10 w-auto" />
         </a>
 
