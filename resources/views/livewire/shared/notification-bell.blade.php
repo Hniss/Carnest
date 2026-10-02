@@ -21,8 +21,7 @@
             @forelse ($notifications as $n)
                 <li class="{{ $n->read_at ? '' : 'bg-brand-50/40' }}">
                     <button type="button" class="w-full text-left px-4 py-3 hover:bg-stone-50"
-                            wire:click="markRead({{ $n->id }})"
-                            @if ($n->link) x-on:click="setTimeout(() => window.location.assign(@js($n->link)), 150)" @endif>
+                            x-on:click="$wire.markRead({{ $n->id }}).then((url) => { if (url) window.location.assign(url) })">
                         <div class="flex items-start gap-2">
                             @unless ($n->read_at) <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-600 shrink-0"></span> @endunless
                             <div class="min-w-0 flex-1">

@@ -100,6 +100,10 @@ class ChatInterface extends Component
 
     public function sendMessage(): void
     {
+        // La case d'écriture reste active pendant que Care répond (le curseur n'en sort
+        // jamais) : seul l'envoi attend la réponse. Le texte préparé est conservé.
+        if ($this->isTyping) return;
+
         if (empty(trim($this->input)) || $this->sessionClosed) return;
 
         $text = trim($this->input);
@@ -114,6 +118,7 @@ class ChatInterface extends Component
             $this->messages[] = ['role' => 'assistant', 'content' => self::RATE_LIMIT_MESSAGE];
             $this->isTyping = false;
             $this->dispatch('scroll-bottom');
+            $this->dispatch('focus-input');
             return;
         }
         RateLimiter::hit($rateKey, 60);
@@ -131,6 +136,7 @@ class ChatInterface extends Component
         }
 
         $this->dispatch('scroll-bottom');
+        $this->dispatch('focus-input');
     }
 
     public function fetchReply(): void
@@ -220,8 +226,7 @@ class ChatInterface extends Component
         $this->messages[] = ['role' => 'assistant', 'content' => $reply];
         $this->isTyping = false;
         $this->dispatch('scroll-bottom');
-        // #5 (V5) : le champ est ré-activé une fois la réponse arrivée → on rend
-        // le focus à l'enfant pour qu'il puisse écrire sans recliquer.
+        // #5 (V5) : on rend le focus à l'enfant pour qu'il puisse écrire sans recliquer.
         $this->dispatch('focus-input');
 
         // P2 (V4) : on persiste l'état courant de la session — last_activity_at,

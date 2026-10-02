@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Support\RoleRedirect;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -51,7 +52,7 @@ new class extends Component
         $user = Auth::user();
 
         if ($user->hasVerifiedEmail()) {
-            $this->redirectIntended(default: route('dashboard', absolute: false));
+            $this->redirect(RoleRedirect::afterLogin($user));
 
             return;
         }

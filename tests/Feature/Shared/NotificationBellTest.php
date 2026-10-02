@@ -16,7 +16,9 @@ class NotificationBellTest extends TestCase
 
     public function test_bell_counts_lists_and_marks_read_only_own_notifications(): void
     {
-        $user  = User::factory()->create();
+        // Destinataire PARENT : le lien de la notification (/parent/messages) est dans son espace.
+        // La cloche ne rend plus un lien que le rôle ne peut pas ouvrir (RoleLinksTest).
+        $user  = User::factory()->create(['role' => 'parent']);
         $other = User::factory()->create();
         $n1 = app(Notifier::class)->notify($user, 'message', 'Nouveau message', null, '/parent/messages');
         $n2 = app(Notifier::class)->notify($user, 'synthese', 'Nouvelle information');

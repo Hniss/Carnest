@@ -17,7 +17,16 @@
             ['group' => 'Administration'],
             ['label' => 'Tableau de bord', 'icon' => 'dashboard', 'href' => route('dashboard'), 'active' => false],
         ],
-        default => [
+        // Un parent n'a que ses pages : jamais le menu de l'administration (tout en 403 pour lui).
+        $user->isParent() => [
+            ['group' => 'Espace parent'],
+            ['label' => 'Accueil',      'icon' => 'home',           'href' => route('parent.home'),     'active' => request()->routeIs('parent.home')],
+            ['label' => 'Journal',      'icon' => 'calendar',       'href' => route('parent.journal'),  'active' => request()->routeIs('parent.journal')],
+            ['label' => 'Messages',     'icon' => 'message-circle', 'href' => route('parent.messages'), 'active' => request()->routeIs('parent.messages')],
+            ['label' => 'Consentement', 'icon' => 'shield-check',   'href' => route('parent.consent'),  'active' => request()->routeIs('parent.consent')],
+            ['label' => 'Mes données',  'icon' => 'file-text',      'href' => route('parent.my-data'),  'active' => request()->routeIs('parent.my-data')],
+        ],
+        $user->isAdmin() => [
             ['group' => 'Pilotage'],
             ['label' => 'Tableau de bord', 'icon' => 'dashboard', 'href' => route('dashboard'),         'active' => request()->routeIs('dashboard')],
             ['label' => 'Élèves',          'icon' => 'users',     'href' => route('admin.students'),    'active' => request()->routeIs('admin.students', 'admin.children.show')],
@@ -27,6 +36,7 @@
             ['group' => 'Paramètres'],
             ['label' => 'Établissement',   'icon' => 'settings',  'href' => route('admin.settings'),    'active' => request()->routeIs('admin.settings')],
         ],
+        default => [],
     };
     if ($user->isAdmin() && $user->delegatedSchools()->isNotEmpty() && request()->routeIs('dashboard', 'admin.*')) {
         $items[] = ['group' => 'Délégation'];

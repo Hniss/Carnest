@@ -86,13 +86,19 @@
     <div class="fixed bottom-0 left-0 right-0 px-4 pb-5 pt-3 bg-gradient-to-t from-stone-50 via-stone-50 to-transparent">
         <div class="max-w-2xl mx-auto">
             <div class="bg-white rounded-2xl shadow-elevated border border-stone-200 p-2 flex gap-2 items-center">
-                <form wire:submit="sendMessage" class="flex-1 flex gap-2 items-center">
+                {{-- Le curseur ne quitte jamais la case : elle n'est ni désactivée ni mise en lecture
+                     seule pendant que Care répond (un champ désactivé perd le focus et ferme le clavier
+                     du téléphone) ; seul l'envoi est bloqué. Pas de wire:submit, qui passe la case en
+                     lecture seule pendant chaque envoi ; mousedown.prevent garde le focus dans la case
+                     quand on appuie sur le bouton. --}}
+                <form x-on:submit.prevent="$wire.sendMessage()" class="flex-1 flex gap-2 items-center">
                     <input wire:model="input" type="text"
                            data-chat-input
                            placeholder="Écris ce que tu ressens…"
-                           class="flex-1 px-4 py-2.5 bg-transparent border-0 focus:ring-0 focus:outline-none text-[15px] placeholder:text-stone-400"
-                           {{ $isTyping ? 'disabled' : '' }}>
+                           class="flex-1 px-4 py-2.5 bg-transparent border-0 focus:ring-0 focus:outline-none text-[15px] placeholder:text-stone-400">
                     <button type="submit"
+                            data-chat-send
+                            x-on:mousedown.prevent
                             class="w-11 h-11 rounded-xl bg-brand-700 hover:bg-brand-800 text-white flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
                             {{ $isTyping ? 'disabled' : '' }}>
                         <x-icon name="send" size="16" />
@@ -133,6 +139,12 @@
 
 @script
 <script>
+    // Le bloc entier est UNE expression (fonction auto-exécutée) : Alpine compile ce bloc
+    // en « __self.result = contenu » ; un contenu qui commence par un commentaire puis
+    // une déclaration const est une erreur de syntaxe et tout le bloc est abandonné sans
+    // bruit (cause du focus jamais rendu, constatée le 2026-10-02). Ne rien écrire hors
+    // de cette fonction.
+    (() => {
     // JS scopé au composant Livewire ($wire dispo). On gère ici trois retours
     // de tests V5 : auto-scroll (#4), focus input (#5), beacon de clôture (#1).
     const messagesEl = document.getElementById('messages');
@@ -148,11 +160,11 @@
     }
     $wire.on('scroll-bottom', scrollDown);
 
-    // #5 — Focus rendu à l'enfant une fois la réponse arrivée (champ ré-activé).
+    // #5 — Focus rendu à l'enfant après chaque envoi et après chaque réponse de Care.
     $wire.on('focus-input', () => {
         requestAnimationFrame(() => {
             const input = document.querySelector('[data-chat-input]');
-            if (input && !input.disabled) input.focus();
+            if (input && document.activeElement !== input) input.focus({ preventScroll: true });
         });
     });
 
@@ -175,5 +187,6 @@
     };
     window.addEventListener('pagehide', sendClose);
     window.addEventListener('beforeunload', sendClose);
+    })();
 </script>
 @endscript

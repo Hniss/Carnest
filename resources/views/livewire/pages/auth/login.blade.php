@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Forms\LoginForm;
+use App\Support\RoleRedirect;
 use Illuminate\Support\Facades\Session;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -15,7 +16,8 @@ new #[Layout('layouts.guest')] class extends Component
         $this->form->authenticate();
         Session::regenerate();
         // Lot 1 — redirection selon le rôle : admin → /dashboard, referent → /dashboard-referent, parent → /parent.
-        $this->redirectIntended(default: auth()->user()->homePath(), navigate: true);
+        // L'adresse mémorisée avant la connexion n'est suivie que si ce rôle y a accès (sinon 403).
+        $this->redirect(RoleRedirect::afterLogin(auth()->user()), navigate: true);
     }
 }; ?>
 

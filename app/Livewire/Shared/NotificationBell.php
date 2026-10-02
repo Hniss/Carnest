@@ -3,6 +3,7 @@
 namespace App\Livewire\Shared;
 
 use App\Models\AppNotification;
+use App\Support\RoleRedirect;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -11,13 +12,18 @@ class NotificationBell extends Component
 {
     public bool $open = false;
 
+    /**
+     * Marque lue et rend l'adresse où aller : le lien de la notification s'il est encore
+     * ouvert à l'utilisateur, sinon l'accueil de son rôle (une délégation terminée, par
+     * exemple, ferme l'espace référent à l'administrateur qui l'a reçue).
+     */
     public function markRead(int $id): ?string
     {
         $n = AppNotification::where('user_id', Auth::id())->find($id);
         abort_unless($n, 404);
         $n->markRead();
 
-        return $n->link;
+        return RoleRedirect::link(Auth::user(), $n->link);
     }
 
     public function markAllRead(): void
