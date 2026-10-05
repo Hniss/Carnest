@@ -190,10 +190,7 @@ class AppServiceProvider extends ServiceProvider
         // (alertes, liens de mot de passe). Sans réglage en base : fichier du serveur.
         $this->app->afterResolving('mail.manager', fn () => \App\Services\MailSettings::apply());
 
-        // Journal de l'espace super-admin : connexion, déconnexion, tentative échouée.
-        \Illuminate\Support\Facades\Event::listen(
-            [\Illuminate\Auth\Events\Login::class, \Illuminate\Auth\Events\Logout::class, \Illuminate\Auth\Events\Failed::class],
-            \App\Listeners\JournalSuperAdminAuth::class,
-        );
+        // Journal de l'espace super-admin (connexion, déconnexion, tentative échouée) :
+        // App\Listeners\JournalSuperAdminAuth, enregistré par la découverte automatique des écouteurs.
     }
 }

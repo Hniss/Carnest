@@ -73,7 +73,7 @@ class DashboardAndJournalTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'superadmin.login_failed', 'target_id' => $sa->id, 'actor_id' => null]);
 
         Volt::test('pages.auth.login')->set('form.email', 'fondateur@example.test')->set('form.password', 'password')->call('login');
-        $this->assertDatabaseHas('audit_logs', ['action' => 'superadmin.login', 'actor_id' => $sa->id]);
+        $this->assertSame(1, \App\Models\AuditLog::where('action', 'superadmin.login')->where('actor_id', $sa->id)->count(), 'Une connexion = une seule ligne de journal.');
 
         $this->actingAs($sa)->post('/logout');
         $this->assertDatabaseHas('audit_logs', ['action' => 'superadmin.logout', 'actor_id' => $sa->id]);
