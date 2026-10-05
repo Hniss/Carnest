@@ -88,11 +88,7 @@ new #[Layout('layouts.guest')] class extends Component
     </form>
 
     <div class="mt-8 pt-6 border-t border-stone-100">
-        <div class="rounded-lg bg-stone-50 border border-stone-200 px-4 py-3">
-            <div class="eyebrow mb-1">Comptes démo</div>
-            <div class="text-xs text-stone-600 font-mono">admin@carenest.ma · referent@carenest.ma · parent@carenest.ma</div>
-        </div>
-        <div class="mt-5 text-center text-xs text-stone-400">
+        <div class="text-center text-xs text-stone-400">
             Vous êtes un élève&nbsp;?
             <a href="{{ route('child.login') }}" class="text-brand-700 font-medium hover:text-brand-900">
                 Accès élève

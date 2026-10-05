@@ -25,7 +25,7 @@
                 Tu n'as pas besoin d'avoir les bons mots.
             </h2>
             <p class="text-brand-50 text-[15px] leading-relaxed">
-                Dis juste ce que tu ressens, comme tu peux. Care est là pour t'écouter avec douceur. 🌿
+                Dis juste ce que tu ressens, comme tu peux. Care est là pour t'écouter avec douceur.
             </p>
         </div>
     </div>
@@ -45,7 +45,7 @@
 
             <div class="bg-white border border-stone-200 rounded-2xl shadow-elevated p-8">
                 <div class="text-center mb-7">
-                    <h1 class="font-display font-extrabold text-2xl text-stone-900">Salut&nbsp;! 👋</h1>
+                    <h1 class="font-display font-extrabold text-2xl text-stone-900">Salut&nbsp;!</h1>
                     <p class="text-sm text-stone-500 mt-1.5">Connecte-toi pour parler à Care.</p>
                 </div>
 
@@ -74,10 +74,6 @@
                     </button>
                 </form>
 
-                <div class="mt-7 rounded-lg bg-brand-50 border border-brand-100 px-4 py-3 text-xs">
-                    <div class="font-semibold text-brand-900 mb-0.5">Compte démo</div>
-                    <div class="text-brand-800 font-mono">yassine@carenest.ma</div>
-                </div>
             </div>
         </div>
     </div>
