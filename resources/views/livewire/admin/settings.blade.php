@@ -27,15 +27,6 @@
                 @error('alertThreshold') <p class="text-xs text-red-600 mt-1.5">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" wire:model="emailNotifications" class="mt-0.5 rounded text-brand-700 focus:ring-brand-500">
-                    <span>
-                        <span class="block text-sm font-semibold text-stone-900">Notifications e-mail</span>
-                        <span class="block text-xs text-stone-500 mt-0.5">Recevoir un e-mail pour les alertes critiques.</span>
-                    </span>
-                </label>
-            </div>
-            <div>
                 <label for="language" class="block text-sm font-semibold text-stone-900 mb-1">Langue de l'interface enfant</label>
                 <select id="language" wire:model="language" class="input max-w-xs">
                     <option value="fr">Français</option>

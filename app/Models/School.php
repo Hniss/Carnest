@@ -13,6 +13,12 @@ class School extends Model
 
     protected $fillable = ['name', 'address', 'city', 'phone', 'email'];
 
+    /** Adresses qui reçoivent les e-mails d'alerte de l'école (espace super-admin). */
+    public function alertRecipients(): HasMany
+    {
+        return $this->hasMany(SchoolAlertRecipient::class);
+    }
+
     public function setting(): HasOne
     {
         return $this->hasOne(SchoolSetting::class);

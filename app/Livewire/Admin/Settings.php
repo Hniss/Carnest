@@ -23,8 +23,6 @@ class Settings extends Component
     #[Validate('required|integer|min:0|max:100')]
     public int $alertThreshold = 30;
 
-    #[Validate('boolean')]
-    public bool $emailNotifications = true;
 
     #[Validate('required|in:fr,ar,en')]
     public string $language = 'fr';
@@ -50,7 +48,6 @@ class Settings extends Component
 
         if ($setting) {
             $this->alertThreshold       = (int) $setting->alert_threshold;
-            $this->emailNotifications   = (bool) $setting->email_notifications;
             $this->language             = (string) $setting->language;
             $this->schoolHoursStart     = substr((string) ($setting->school_hours_start ?? '08:00'), 0, 5);
             $this->schoolHoursEnd       = substr((string) ($setting->school_hours_end ?? '17:00'), 0, 5);
@@ -69,7 +66,6 @@ class Settings extends Component
             ['school_id' => $school->id],
             [
                 'alert_threshold'       => $this->alertThreshold,
-                'email_notifications'   => $this->emailNotifications,
                 'language'              => $this->language,
                 'school_hours_start'    => $this->schoolHoursStart,
                 'school_hours_end'      => $this->schoolHoursEnd,

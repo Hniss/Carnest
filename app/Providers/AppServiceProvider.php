@@ -185,5 +185,9 @@ class AppServiceProvider extends ServiceProvider
     {
         // Lot 3 — dates relatives (« il y a 5 minutes ») en français.
         \Illuminate\Support\Carbon::setLocale(config('app.locale', 'fr'));
+
+        // Boîte d'envoi réglée dans l'espace super-admin : appliquée avant le premier e-mail
+        // (alertes, liens de mot de passe). Sans réglage en base : fichier du serveur.
+        $this->app->afterResolving('mail.manager', fn () => \App\Services\MailSettings::apply());
     }
 }

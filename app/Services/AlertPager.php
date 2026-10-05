@@ -9,6 +9,7 @@ use App\Models\Alert;
 use App\Models\AlertNotification;
 use App\Models\ReferentDelegation;
 use App\Models\School;
+use App\Models\SchoolAlertRecipient;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -106,6 +107,7 @@ class AlertPager
         if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT && $referent) {
             $this->notifyApp($alert, $referent, 0, 'alerte', 'Une alerte attend votre accusé', 'Un signal vient d\'être détecté. Prenez-en connaissance dans votre espace référent.', $link);
             $this->sendEmail($alert, $referent, 0);
+            $this->sendEmailToSchoolRecipients($alert, 0);
             $reached = $this->markServed($alert, $reached, self::TIER_REFERENT);
         }
 
@@ -178,6 +180,7 @@ class AlertPager
             if ($referent) {
                 $this->notifyApp($alert, $referent, 1, 'alerte', 'Rappel : une alerte attend votre accusé', 'Cette alerte n\'a pas encore été prise en connaissance.', $link);
                 $this->sendEmail($alert, $referent, 1);
+                $this->sendEmailToSchoolRecipients($alert, 1);
                 $this->sendSms($alert, $referent, 1, $school?->setting?->referent_phone ?: $referent->phone);
             }
             $delegate = $school ? $this->activeDelegate($school) : null;
@@ -283,14 +286,45 @@ class AlertPager
         if (! $user->email) {
             return;
         }
+        $this->emailTo($alert, $step, $user->email, $user->id, []);
+    }
+
+    /**
+     * Décision Q2 du 2026-10-05 : les adresses d'alerte de l'école (réglées par le super-admin)
+     * reçoivent les mêmes e-mails que le référent, aux mêmes moments. Aucune donnée nominative.
+     */
+    private function sendEmailToSchoolRecipients(Alert $alert, int $step): void
+    {
+        $recipients = SchoolAlertRecipient::where('school_id', $alert->school_id)->get();
+        foreach ($recipients as $recipient) {
+            $this->emailTo($alert, $step, $recipient->email, null, ['destinataire_ecole' => $recipient->id]);
+        }
+    }
+
+    /**
+     * D3 (2026-10-05) : un envoi en échec est tracé comme un échec (`sent_at` vide,
+     * `statut` = echec), jamais comme un envoi. Seule la nature de l'erreur est notée,
+     * jamais son message (il peut citer le serveur ou l'identifiant de la boîte d'envoi).
+     */
+    private function emailTo(Alert $alert, int $step, string $address, ?int $recipientId, array $payload): void
+    {
+        $journal = $this->journal($alert, $step, 'email', $recipientId, $payload + ['statut' => 'envoye']);
         try {
             $mailable = new AlertPagedMail($alert->id, $step);
-            $pending  = Mail::to($user->email);
-            $this->deliver($pending, $mailable);
+            $pending  = Mail::to($address);
+            $this->deliver($pending, $mailable, $journal);
         } catch (\Throwable $e) {
-            Log::warning('E-mail de paging non envoyé', ['alert' => $alert->id, 'error' => $e->getMessage()]);
+            $this->markEmailFailed($journal, $e);
         }
-        $this->journal($alert, $step, 'email', $user->id);
+    }
+
+    private function markEmailFailed(AlertNotification $journal, \Throwable $e): void
+    {
+        $journal->update([
+            'sent_at' => null,
+            'payload' => array_merge((array) $journal->payload, ['statut' => 'echec', 'erreur' => class_basename($e)]),
+        ]);
+        Log::warning('E-mail de paging non envoyé', ['alert' => $journal->alert_id, 'erreur' => class_basename($e)]);
     }
 
     /**
@@ -300,18 +334,18 @@ class AlertPager
      * envoi immédiat ; sinon envoi juste après la réponse HTTP (ou en fin de
      * commande), sans latence pour l'enfant et sans dépendre d'un worker.
      */
-    private function deliver(PendingMail $pending, Mailable $mailable): void
+    private function deliver(PendingMail $pending, Mailable $mailable, AlertNotification $journal): void
     {
         if (config('queue.default') === 'sync') {
             $pending->send($mailable);
             return;
         }
 
-        app()->terminating(function () use ($pending, $mailable) {
+        app()->terminating(function () use ($pending, $mailable, $journal) {
             try {
                 $pending->send($mailable);
             } catch (\Throwable $e) {
-                Log::warning("E-mail d'alerte non envoyé (après réponse)", ['error' => $e->getMessage()]);
+                $this->markEmailFailed($journal, $e);
             }
         });
     }
@@ -329,7 +363,7 @@ class AlertPager
         $this->journal($alert, $step, 'sms', $user->id);
     }
 
-    private function journal(Alert $alert, int $step, string $channel, ?int $recipientId): AlertNotification
+    private function journal(Alert $alert, int $step, string $channel, ?int $recipientId, ?array $payload = null): AlertNotification
     {
         return AlertNotification::create([
             'alert_id'        => $alert->id,
@@ -337,6 +371,7 @@ class AlertPager
             'recipient_id'    => $recipientId,
             'escalation_step' => $step,
             'sent_at'         => now(),
+            'payload'         => $payload,
         ]);
     }
 
