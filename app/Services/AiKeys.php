@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\AiCredential;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -28,10 +30,13 @@ final class AiKeys
                 ->filter(fn (AiCredential $c) => in_array($c->provider, self::PROVIDERS, true) && trim((string) $c->api_key) !== '')
                 ->mapWithKeys(fn (AiCredential $c) => [$c->provider => trim((string) $c->api_key)])
                 ->all();
-        } catch (\Throwable $e) {
-            // Table absente (base pas encore migrée) ou clé de l'application changée : on
-            // retombe sur le fichier du serveur, sans jamais journaliser la valeur.
-            Log::warning('Clés d\'IA en base illisibles, repli sur la configuration du serveur.', ['erreur' => $e::class]);
+        } catch (QueryException) {
+            // Table absente (base pas encore migrée) : fichier du serveur seul.
+            return [];
+        } catch (DecryptException) {
+            // Clé de l'application changée : les clés en base sont illisibles et doivent être
+            // ressaisies. Repli sur le fichier du serveur, jamais de valeur journalisée.
+            Log::warning('Clés d\'IA en base illisibles (clé de l\'application changée), repli sur la configuration du serveur.');
 
             return [];
         }
