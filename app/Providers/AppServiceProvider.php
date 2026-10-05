@@ -6,6 +6,7 @@ use App\Contracts\RawCompletionClient;
 use App\Contracts\SmsSender;
 use App\Services\Adjudicator;
 use App\Services\AIService;
+use App\Services\AiKeys;
 use App\Services\ClaudeAIService;
 use App\Services\FakeAIService;
 use App\Services\GeminiService;
@@ -28,24 +29,25 @@ class AppServiceProvider extends ServiceProvider
                 return new FakeAIService();
             }
 
-            $provider = config('services.ai.provider', 'gemini');
+            // Choix automatique : clés en base d'abord (espace super-admin), puis fichier du serveur.
+            $provider = AiKeys::primary();
 
             if ($provider === 'anthropic') {
                 return new ClaudeAIService(
-                    apiKey: config('services.ai.anthropic_key'),
+                    apiKey: AiKeys::key('anthropic'),
                     model: config('services.ai.anthropic_model', 'claude-sonnet-4-20250514'),
                 );
             }
 
             if ($provider === 'openai') {
                 return new OpenAIService(
-                    apiKey: config('services.ai.openai_key'),
+                    apiKey: AiKeys::key('openai'),
                     model: config('services.ai.openai_model', 'gpt-4o-mini'),
                 );
             }
 
             return new GeminiService(
-                apiKey: config('services.ai.gemini_key'),
+                apiKey: AiKeys::key('gemini'),
                 model: config('services.ai.gemini_model', 'gemini-2.5-flash'),
             );
         });
@@ -91,20 +93,20 @@ class AppServiceProvider extends ServiceProvider
 
         if ($provider === 'anthropic') {
             return new ClaudeAIService(
-                apiKey: (string) config('services.ai.anthropic_key'),
+                apiKey: AiKeys::key('anthropic'),
                 model: $model ?: (string) config('services.ai.anthropic_model', 'claude-sonnet-4-20250514'),
             );
         }
 
         if ($provider === 'openai') {
             return new OpenAIService(
-                apiKey: (string) config('services.ai.openai_key'),
+                apiKey: AiKeys::key('openai'),
                 model: $model ?: (string) config('services.ai.openai_model', 'gpt-4o-mini'),
             );
         }
 
         return new GeminiService(
-            apiKey: (string) config('services.ai.gemini_key'),
+            apiKey: AiKeys::key('gemini'),
             model: $model ?: (string) config('services.ai.gemini_model', 'gemini-2.5-flash'),
         );
     }
@@ -121,8 +123,8 @@ class AppServiceProvider extends ServiceProvider
     private function resolveAdjudicatorProvider(): ?string
     {
         // Un AI_PROVIDER inconnu retombe sur Gemini côté premier passage : même règle ici.
-        $primary = (string) config('services.ai.provider', 'gemini');
-        $primary = in_array($primary, self::ADJUDICATOR_PREFERENCE, true) ? $primary : 'gemini';
+        // Même source que le chat : fournisseur choisi automatiquement (base puis fichier serveur).
+        $primary = AiKeys::primary();
         $wanted  = (string) config('services.ai.adjudicator_provider', 'anthropic');
         $wanted  = in_array($wanted, self::ADJUDICATOR_PREFERENCE, true) ? $wanted : 'anthropic';
 
@@ -170,7 +172,7 @@ class AppServiceProvider extends ServiceProvider
 
     private function hasKeyFor(string $provider): bool
     {
-        return trim((string) config('services.ai.' . $provider . '_key')) !== '';
+        return AiKeys::has($provider);
     }
 
     /** Lot 3 — vrai seulement en environnement local avec AI_FAKE=1. */
