@@ -189,5 +189,11 @@ class AppServiceProvider extends ServiceProvider
         // Boîte d'envoi réglée dans l'espace super-admin : appliquée avant le premier e-mail
         // (alertes, liens de mot de passe). Sans réglage en base : fichier du serveur.
         $this->app->afterResolving('mail.manager', fn () => \App\Services\MailSettings::apply());
+
+        // Journal de l'espace super-admin : connexion, déconnexion, tentative échouée.
+        \Illuminate\Support\Facades\Event::listen(
+            [\Illuminate\Auth\Events\Login::class, \Illuminate\Auth\Events\Logout::class, \Illuminate\Auth\Events\Failed::class],
+            \App\Listeners\JournalSuperAdminAuth::class,
+        );
     }
 }

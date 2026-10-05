@@ -257,6 +257,17 @@ backend/                         # Laravel app
   - **Session du chat** : `ChatInterface::$sessionId` est verrouillé (`#[Locked]`, le navigateur ne peut plus le modifier). `sendMessage`, `fetchReply` et `endSession` refusent (403) une session qui n'appartient pas à l'élève connecté — page restée ouverte sur un poste partagé après la connexion d'un autre élève, numéro falsifié : rien n'est écrit, aucun appel au modèle, journal `Chat session ownership refused` avec la seule action. Toute lecture ou écriture de la session (`hydrate`, pire moment, plafond, clôture, recherche de session de l'alerte) passe par `ownSession()`, bornée à l'élève connecté. Avant : en changeant ce numéro, un élève abaissait la zone d'un camarade, remplaçait son résumé (session et alerte), gonflait son compteur et clôturait sa session.
   - **Tests** : 395 → 406 (`ChildSpaceLinksTest`, `ChatSessionOwnershipTest`). Chaque garde vérifiée par neutralisation. Recette navigateur sur une copie de la base de dev (compte jetable, vrai formulaire, copie revenue à l'identique ensuite).
 
+- [x] **Espace super-admin du 2026-10-05** (fondateurs : Hamza, Marouane — spec `H&Y/clients/carenest/2026-10-05_spec-superadmin`, décisions de l'orchestrateur).
+  - **Rôle `superadmin`** (rattaché à aucune école, ne voit ni conversation ni nom d'élève), accueil `/superadmin`, commande `carenest:create-superadmin` (mot de passe aléatoire écrit dans `storage/app/private/comptes-superadmin.txt`, droits 600, jamais affiché ; adresse déjà utilisée refusée).
+  - **Redirections** : une page d'un autre profil renvoie vers l'accueil du sien (actions et appels JSON : 403). `/` non connecté → connexion adulte ; lien « Accès élève » retiré ; page Laravel supprimée.
+  - **Clés d'IA** (`/superadmin/cles`) : table `ai_credentials` (cast `encrypted`, 4 derniers caractères), prioritaires sur `.env` ; choix automatique Gemini → GPT → Claude ; double vérification sur un autre fournisseur, même source (`AiKeys`).
+  - **Boîte d'envoi** (`/superadmin/boite-envoi`) : `mail_settings` (mot de passe chiffré), appliquée au mailer à sa construction → alertes ET liens de mot de passe.
+  - **Écoles** (lecture seule) : destinataires d'alerte par école (mêmes e-mails que le référent), comptes admin (créer avec lien, modifier, désactiver/réactiver, avertissement dernier admin actif).
+  - **Tableau de bord** : sessions, élèves actifs, jetons échangés (pas la consommation facturée), jours au plafond sur 7 jours ; sessions d'avant le 22/09/2026 exclues.
+  - **Journal** : connexion, échec, déconnexion, chaque consultation, chaque changement de clé (`superadmin.*`), jamais une valeur secrète.
+  - **Corrections** : D2 case « Notifications e-mail » retirée (lue par aucun code) ; D3 e-mail en échec tracé `statut=echec`, `sent_at` vide.
+  - **Tests** : 460 → 494 (`tests/Feature/SuperAdmin/*` ; tests 403 → redirection mis à jour).
+
 ### Réserves QA ouvertes (non bloquantes)
 - Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système). **Atténué V6** : le beacon de clôture (#1) ferme désormais la session dès la fermeture/actualisation de fenêtre ; `CloseIdleSessions` n'est plus que le filet ultime.
 - ~~**V6** : le canal email d'alerte critique reste différé (décision PO #2).~~ **Réglé au lot 2 v3** (`AlertPager` : e-mail + notification interne + SMS pilote ; SMTP à configurer via `MAIL_*`).
