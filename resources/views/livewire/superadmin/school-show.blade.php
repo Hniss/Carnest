@@ -51,7 +51,10 @@
             </div>
             <div>
                 <label for="adminEmail" class="label">E-mail</label>
-                <input id="adminEmail" type="email" wire:model="adminEmail" class="input">
+                <input id="adminEmail" type="email" wire:model="adminEmail" class="input {{ $editingAdminId ? 'bg-stone-100 text-stone-500' : '' }}" @if ($editingAdminId) readonly aria-describedby="adminEmailHelp" @endif>
+                @if ($editingAdminId)
+                    <p id="adminEmailHelp" class="text-xs text-stone-500 mt-1">L'adresse ne se modifie pas : pour en changer, créer un nouveau compte admin puis désactiver celui-ci.</p>
+                @endif
                 @error('adminEmail') <p class="text-sm text-red-700 mt-1" role="alert">{{ $message }}</p> @enderror
             </div>
             <div>

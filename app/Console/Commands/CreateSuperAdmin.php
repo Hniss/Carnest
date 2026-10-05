@@ -43,9 +43,16 @@ class CreateSuperAdmin extends Command
         $file     = (string) ($this->option('file') ?: storage_path('app/private/comptes-superadmin.txt'));
         $password = Str::password(20, symbols: false);
 
-        File::ensureDirectoryExists(dirname($file));
-        File::append($file, $email . ' ' . $password . PHP_EOL);
-        @chmod($file, 0600);
+        // Audit sécurité 2026-10-05 : le fichier est créé en 600 AVANT d'y écrire le mot de passe,
+        // et tout échec arrête la commande sans créer de compte.
+        if (! $this->preparePrivateFile($file)) {
+            $this->error('Fichier privé impossible à créer en accès réservé (600) : aucun compte créé.');
+            return self::FAILURE;
+        }
+        if (file_put_contents($file, $email . ' ' . $password . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+            $this->error('Écriture du fichier privé impossible : aucun compte créé.');
+            return self::FAILURE;
+        }
 
         $user = User::create([
             'name'              => $name,
@@ -69,5 +76,25 @@ class CreateSuperAdmin extends Command
         $this->info("Compte super-admin créé pour {$email}. Mot de passe ajouté au fichier privé : {$file}");
 
         return self::SUCCESS;
+    }
+
+    private function preparePrivateFile(string $file): bool
+    {
+        try {
+            File::ensureDirectoryExists(dirname($file));
+            if (is_dir($file)) {
+                return false;
+            }
+            $previous = umask(0077);
+            try {
+                $ok = file_exists($file) || touch($file);
+            } finally {
+                umask($previous);
+            }
+
+            return $ok && chmod($file, 0600);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

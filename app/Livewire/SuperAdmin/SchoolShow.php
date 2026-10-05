@@ -6,12 +6,10 @@ use App\Livewire\Concerns\RequiresSuperAdmin;
 use App\Models\School;
 use App\Models\SchoolAlertRecipient;
 use App\Models\User;
-use App\Notifications\AccountEmailChanged;
 use App\Services\Audit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -150,34 +148,30 @@ class SchoolShow extends Component
         $this->resetErrorBag();
     }
 
+    /**
+     * Audit sécurité 2026-10-05 (CWE-269) : le super-admin ne change JAMAIS l'e-mail d'un admin
+     * d'école. Sinon il pourrait mettre sa propre adresse, demander « mot de passe oublié » et
+     * entrer dans un compte qui voit les données nominatives de l'école (règle validée par
+     * Hamza : le super-admin ne voit ni conversation ni nom d'enfant). Pour changer d'adresse :
+     * créer un nouveau compte admin, puis désactiver l'ancien.
+     */
     public function updateAdmin(): void
     {
         abort_unless($this->editingAdminId, 422);
         $u = $this->ownAdmin($this->editingAdminId);
-        $this->adminEmail = Str::lower(trim($this->adminEmail));
+
+        if (Str::lower(trim($this->adminEmail)) !== Str::lower($u->email)) {
+            $this->adminEmail = $u->email;
+            $this->addError('adminEmail', 'L\'adresse d\'un compte existant ne se modifie pas : créez un nouveau compte admin, puis désactivez celui-ci.');
+            return;
+        }
 
         $this->validate([
             'adminName'  => ['required', 'string', 'max:150'],
-            'adminEmail' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($u->id)],
             'adminPhone' => ['nullable', 'string', 'max:30'],
-        ], ['adminEmail.unique' => 'Cette adresse est déjà utilisée par un compte.'],
-            ['adminName' => 'nom', 'adminEmail' => 'e-mail', 'adminPhone' => 'téléphone']);
+        ], [], ['adminName' => 'nom', 'adminPhone' => 'téléphone']);
 
-        $oldEmail     = $u->email;
-        $emailChanged = Str::lower($oldEmail) !== $this->adminEmail;
-
-        DB::transaction(function () use ($u, $emailChanged) {
-            $u->update(['name' => trim($this->adminName), 'email' => $this->adminEmail, 'phone' => trim($this->adminPhone) ?: null]);
-            // Même règle que l'écran Comptes de l'école : nouvelle adresse non vérifiée, accès ouverts coupés.
-            if ($emailChanged) {
-                $u->forceFill(['email_verified_at' => null])->setRememberToken(Str::random(60));
-                $u->save();
-                DB::table('sessions')->where('user_id', $u->id)->delete();
-            }
-        });
-        if ($emailChanged) {
-            Notification::route('mail', $oldEmail)->notify(new AccountEmailChanged($u->name));
-        }
+        $u->update(['name' => trim($this->adminName), 'phone' => trim($this->adminPhone) ?: null]);
         Audit::log('superadmin.admin_account.update', $u, ['school_id' => $this->schoolId]);
 
         $this->cancelEditAdmin();

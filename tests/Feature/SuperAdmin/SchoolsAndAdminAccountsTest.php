@@ -76,10 +76,9 @@ class SchoolsAndAdminAccountsTest extends TestCase
         $a2 = $this->makeAdmin($school);
 
         $page = Livewire::actingAs($sa)->test(SchoolShow::class, ['school' => $school])
-            ->call('editAdmin', $a1->id)->set('adminName', 'Nom Corrigé')->set('adminEmail', 'nouveau@ecole.test')
+            ->call('editAdmin', $a1->id)->set('adminName', 'Nom Corrigé')
             ->call('updateAdmin')->assertHasNoErrors();
         $this->assertSame('Nom Corrigé', $a1->fresh()->name);
-        $this->assertSame('nouveau@ecole.test', $a1->fresh()->email);
 
         $page->call('deactivateAdmin', $a1->id)->assertDontSee('dernier administrateur actif');
         $this->assertNotNull($a1->fresh()->deactivated_at);
