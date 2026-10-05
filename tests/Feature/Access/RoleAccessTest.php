@@ -9,7 +9,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 use Tests\TestCase;
 
-/** Lot 1 — cloisonnement par rôle côté serveur (middleware `role`). */
+/**
+ * Lot 1 — cloisonnement par rôle côté serveur (middleware `role`).
+ * Depuis le 2026-10-05 (décision Q3) : la page d'un autre profil renvoie vers l'accueil du sien.
+ */
 class RoleAccessTest extends TestCase
 {
     use RefreshDatabase;
@@ -41,15 +44,15 @@ class RoleAccessTest extends TestCase
         $child  = Child::factory()->for($school)->create();
         $parent = $this->parent($child);
 
-        $this->actingAs($parent)->get('/dashboard-referent')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard-referent/eleves')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard-referent/eleves/' . $child->id)->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard-referent/messages')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard-referent/delegation')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard/eleves')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard/comptes')->assertForbidden();
-        $this->actingAs($parent)->get('/dashboard/journal')->assertForbidden();
+        $this->actingAs($parent)->get('/dashboard-referent')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard-referent/eleves')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard-referent/eleves/' . $child->id)->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard-referent/messages')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard-referent/delegation')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard/eleves')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard/comptes')->assertRedirect('/parent');
+        $this->actingAs($parent)->get('/dashboard/journal')->assertRedirect('/parent');
     }
 
     public function test_referent_cannot_reach_admin_or_parent_space(): void
@@ -57,9 +60,9 @@ class RoleAccessTest extends TestCase
         $school = School::factory()->create();
         $ref = $this->referent($school);
 
-        $this->actingAs($ref)->get('/dashboard')->assertForbidden();
-        $this->actingAs($ref)->get('/dashboard/eleves')->assertForbidden();
-        $this->actingAs($ref)->get('/parent')->assertForbidden();
+        $this->actingAs($ref)->get('/dashboard')->assertRedirect('/dashboard-referent');
+        $this->actingAs($ref)->get('/dashboard/eleves')->assertRedirect('/dashboard-referent');
+        $this->actingAs($ref)->get('/parent')->assertRedirect('/dashboard-referent');
     }
 
     public function test_admin_cannot_reach_parent_space_nor_referent_students(): void
@@ -67,8 +70,8 @@ class RoleAccessTest extends TestCase
         $school = School::factory()->create();
         $admin = $this->admin($school);
 
-        $this->actingAs($admin)->get('/parent')->assertForbidden();
-        $this->actingAs($admin)->get('/dashboard-referent/eleves')->assertForbidden();
+        $this->actingAs($admin)->get('/parent')->assertRedirect('/dashboard');
+        $this->actingAs($admin)->get('/dashboard-referent/eleves')->assertRedirect('/dashboard');
     }
 
     public function test_root_redirects_by_role(): void

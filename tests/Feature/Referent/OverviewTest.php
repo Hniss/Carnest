@@ -62,7 +62,7 @@ class OverviewTest extends TestCase
             ->assertOk()
             ->assertSee('Mode délégation')
             ->assertSee('Eleve Demo Delegue');
-        $this->actingAs($admin)->get('/dashboard-referent/eleves')->assertForbidden();
-        $this->actingAs($admin)->get('/dashboard-referent/eleves/' . $child->id)->assertForbidden();
+        $this->actingAs($admin)->get('/dashboard-referent/eleves')->assertRedirect('/dashboard');
+        $this->actingAs($admin)->get('/dashboard-referent/eleves/' . $child->id)->assertRedirect('/dashboard');
     }
 }

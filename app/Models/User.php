@@ -19,7 +19,7 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     /** D2 / D9 (v3) — rôles techniques des comptes adultes. */
-    public const ROLES = ['admin', 'referent', 'parent'];
+    public const ROLES = ['admin', 'referent', 'parent', 'superadmin'];
 
     protected function casts(): array
     {
@@ -62,10 +62,17 @@ class User extends Authenticatable
         return $this->role === 'parent';
     }
 
+    /** Fondateur CareNest (espace /superadmin) : rattaché à aucune école, ne voit aucune donnée d'enfant. */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
     /** Page d'accueil après connexion, selon le rôle (lot 1 §2). */
     public function homePath(): string
     {
         return match ($this->role) {
+            'superadmin' => '/superadmin',
             'referent' => '/dashboard-referent',
             'parent'   => '/parent',
             default    => '/dashboard',
@@ -78,6 +85,7 @@ class User extends Authenticatable
             'admin'    => 'Administration',
             'referent' => 'Référent',
             'parent'   => 'Parent',
+            'superadmin' => 'Super-admin',
             default    => 'Inconnu',
         };
     }

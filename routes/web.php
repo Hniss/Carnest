@@ -19,13 +19,29 @@ use App\Livewire\Referent\Messages as ReferentMessages;
 use App\Livewire\Referent\Overview;
 use App\Livewire\Referent\StudentProfile;
 use App\Livewire\Referent\Students as ReferentStudents;
+use App\Livewire\SuperAdmin\AiKeys as SuperAdminAiKeys;
+use App\Livewire\SuperAdmin\Dashboard as SuperAdminDashboard;
+use App\Livewire\SuperAdmin\MailSettings as SuperAdminMailSettings;
+use App\Livewire\SuperAdmin\SchoolShow as SuperAdminSchoolShow;
+use App\Livewire\SuperAdmin\Schools as SuperAdminSchools;
 use Illuminate\Support\Facades\Route;
 
-// Page d'accueil — redirige selon le rôle connecté (lot 1 §2)
+// Page d'accueil — redirige selon le rôle connecté (lot 1 §2). Visiteur non connecté :
+// connexion des adultes (décision Q1 du 2026-10-05 : espace adulte et espace élève séparés,
+// l'élève entre par /child/login, adresse donnée par l'école).
 Route::get('/', function () {
     if (auth('child')->check()) return redirect()->route('child.chat');
     if (auth()->check()) return redirect(auth()->user()->homePath());
-    return view('welcome');
+    return redirect()->route('login');
+});
+
+// ── Espace super-admin (fondateurs CareNest) ───────────────────────────
+Route::middleware(['auth', 'role:superadmin'])->prefix('superadmin')->name('superadmin.')->group(function () {
+    Route::get('/', SuperAdminDashboard::class)->name('dashboard');
+    Route::get('/ecoles', SuperAdminSchools::class)->name('schools');
+    Route::get('/ecoles/{school}', SuperAdminSchoolShow::class)->name('schools.show');
+    Route::get('/cles', SuperAdminAiKeys::class)->name('ai-keys');
+    Route::get('/boite-envoi', SuperAdminMailSettings::class)->name('mail');
 });
 
 // ── Administration (guard web / Breeze, rôle admin) ────────────────────

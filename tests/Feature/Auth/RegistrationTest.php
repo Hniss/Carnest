@@ -28,7 +28,8 @@ class RegistrationTest extends TestCase
 
     public function test_the_home_page_offers_no_way_to_register(): void
     {
-        $this->get('/')
+        $this->get('/')->assertRedirect('/login');
+        $this->followingRedirects()->get('/')
             ->assertOk()
             ->assertDontSee('/register')
             ->assertDontSee('Register');

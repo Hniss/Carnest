@@ -87,12 +87,4 @@ new #[Layout('layouts.guest')] class extends Component
         </button>
     </form>
 
-    <div class="mt-8 pt-6 border-t border-stone-100">
-        <div class="text-center text-xs text-stone-400">
-            Vous êtes un élève&nbsp;?
-            <a href="{{ route('child.login') }}" class="text-brand-700 font-medium hover:text-brand-900">
-                Accès élève
-            </a>
-        </div>
-    </div>
 </div>
