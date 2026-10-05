@@ -62,6 +62,7 @@ class AuthPagesProductionTextTest extends TestCase
         $this->assertFrenchOnly($html);
         $this->assertStringContainsString('Mot de passe oublié', $html);
         $this->assertStringContainsString('Envoyer le lien de réinitialisation', $html);
+        $this->assertStringContainsString("adresse e-mail : vous", $html, 'Le deux-points ne doit jamais commencer une ligne.');
     }
 
     public function test_reset_password_page_is_in_french(): void
