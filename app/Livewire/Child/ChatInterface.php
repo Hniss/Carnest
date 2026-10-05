@@ -33,6 +33,19 @@ class ChatInterface extends Component
     /** Message doux servi au-delà du débit autorisé (aucun appel à l'IA). */
     public const RATE_LIMIT_MESSAGE = "Je suis là, prends une petite pause et on continue dans un instant.";
 
+    /** Message de repli qui propose la respiration carrée (4-4-4-4), guidée par l'avatar. */
+    public const SQUARE_BREATHING_FALLBACK = "On peut faire la respiration carrée ensemble : on inspire 4 secondes, on garde 4 secondes, on souffle 4 secondes, on attend 4 secondes. Tu veux essayer ?";
+
+    /** Rythme exact de chaque exercice de respiration (secondes par phase). */
+    public const BREATHING_PHASES = [
+        '478'    => [['label' => 'Inspire', 'seconds' => 4, 'scale' => 'in'], ['label' => 'Retiens', 'seconds' => 7, 'scale' => 'hold'], ['label' => 'Expire', 'seconds' => 8, 'scale' => 'out']],
+        'carree' => [['label' => 'Inspire', 'seconds' => 4, 'scale' => 'in'], ['label' => 'Retiens', 'seconds' => 4, 'scale' => 'hold'], ['label' => 'Expire', 'seconds' => 4, 'scale' => 'out'], ['label' => 'Attends', 'seconds' => 4, 'scale' => 'rest']],
+    ];
+
+    /** Bornes de l'historique transmis au modèle (audit sécurité 2026-10-05, F6). */
+    public const MAX_HISTORY_MESSAGES = 60;
+    public const MAX_MESSAGE_CHARS = 2000;
+
     /**
      * D8 (v3) — messages de clôture chaleureuse quand le plafond journalier est
      * atteint en zone verte sans alerte. Aucune mention de quota, de limite ni de tokens.
@@ -47,9 +60,16 @@ class ChatInterface extends Component
     private const MEMORY_CACHE_PREFIX = 'chat-memoire:';
     private const MEMORY_CACHE_HOURS = 12;
 
+    /**
+     * Historique d'affichage — verrouillé (audit sécurité 2026-10-05, F6) : le serveur seul
+     * l'écrit, le navigateur ne peut ni y glisser une consigne ni réécrire un échange.
+     */
+    #[Locked]
     public array $messages = [];
     public string $input = '';
+    #[Locked]
     public bool $isTyping = false;
+    #[Locked]
     public bool $sessionClosed = false;
 
     /**
@@ -83,12 +103,14 @@ class ChatInterface extends Component
      * plutôt que d'enchaîner les fallbacks génériques qui donnent l'impression
      * d'une boucle (bug remonté UI : 2 fallbacks « Je t'écoute… » / « D'accord, je suis là… »).
      */
+    #[Locked]
     public int $consecutiveFailures = 0;
 
     /**
      * Dernier fallback servi (texte). Permet de NE JAMAIS renvoyer deux fois de
      * suite la même phrase de secours quand l'IA enchaîne les échecs.
      */
+    #[Locked]
     public ?string $lastFallback = null;
 
     /**
@@ -108,6 +130,8 @@ class ChatInterface extends Component
     public function hydrate(): void
     {
         $child = Auth::guard('child')->user();
+        abort_if($child !== null && Child::whereKey($child->id)->whereNotNull('deactivated_at')->exists(), 403);
+
         $session = $this->ownSession()->first(['id', 'zone', 'worst_alert_type']);
 
         $this->currentZone      = $session?->zone ?? 'green';
@@ -217,7 +241,7 @@ class ChatInterface extends Component
 
         if (empty(trim($this->input)) || $this->sessionClosed) return;
 
-        $text = trim($this->input);
+        $text = mb_substr(trim($this->input), 0, self::MAX_MESSAGE_CHARS);
         $this->input = '';
         $this->messages[] = ['role' => 'user', 'content' => $text];
 
@@ -257,6 +281,18 @@ class ChatInterface extends Component
         if (! $this->isTyping) return;
 
         $child = Auth::guard('child')->user();
+
+        // F6 (audit 2026-10-05) — la limite de débit couvre aussi l'appel au modèle.
+        $replyKey = self::replyRateLimitKey((int) $child->id);
+        if (RateLimiter::tooManyAttempts($replyKey, self::RATE_LIMIT_PER_MINUTE)) {
+            $this->messages[] = ['role' => 'assistant', 'content' => self::RATE_LIMIT_MESSAGE];
+            $this->isTyping = false;
+            $this->dispatch('scroll-bottom');
+            $this->dispatch('focus-input');
+            return;
+        }
+        RateLimiter::hit($replyKey, 60);
+
         $detector = app(CrisisDetector::class);
 
         // 1) Filet de sécurité déterministe sur le DERNIER message enfant.
@@ -270,10 +306,7 @@ class ChatInterface extends Component
         // avant tout échange) pour que Gemini reçoive le system prompt propre
         // dès le premier message de l'enfant. Sinon le bot répond parfois de
         // manière générique au tout premier tour.
-        $aiMessages = collect($this->messages)
-            ->skipWhile(fn ($m) => $m['role'] === 'assistant')
-            ->values()
-            ->toArray();
+        $aiMessages = self::modelHistory($this->messages);
 
         $aiResult = null;
         try {
@@ -333,10 +366,19 @@ class ChatInterface extends Component
             $reply = $this->safetyMessage($child->age_group);
         }
 
+        // Avatar guide (option C, 2026-10-05) : uniquement quand la réponse affichée propose
+        // l'exercice de respiration en zone jaune — jamais sous un message de sécurité.
+        $exercise = $aiFailed
+            ? ($reply === self::SQUARE_BREATHING_FALLBACK ? 'carree' : null)
+            : ($aiResult['exercise'] ?? null);
+        if ($mergedZone !== 'yellow' || $deterministic['zone'] === 'red' || ! in_array($exercise, ['carree', '478'], true)) {
+            $exercise = null;
+        }
+
         $this->currentZone = $mergedZone;
         $this->currentAlertType = $alertType;
 
-        $this->messages[] = ['role' => 'assistant', 'content' => $reply];
+        $this->messages[] = ['role' => 'assistant', 'content' => $reply] + ($exercise ? ['exercise' => $exercise] : []);
         $this->isTyping = false;
         $this->dispatch('scroll-bottom');
         // #5 (V5) : on rend le focus à l'enfant pour qu'il puisse écrire sans recliquer.
@@ -428,7 +470,7 @@ class ChatInterface extends Component
             if ($session) {
                 $result = app(SessionCloser::class)->close(
                     $session,
-                    collect($this->messages)->slice(1)->values()->toArray(),
+                    self::modelHistory($this->messages),
                     $child,
                     $this->currentZone,
                     $this->currentAlertType,
@@ -473,7 +515,7 @@ class ChatInterface extends Component
         // V5 : logique de clôture mutualisée avec le beacon de fermeture de fenêtre
         // (SessionCloser) — analyse IA, pire zone conservée, alerte idempotente,
         // recalcul score/statut synchrone. Welcome retiré (slice(1)) du contexte.
-        $aiMessages = collect($this->messages)->slice(1)->values()->toArray();
+        $aiMessages = self::modelHistory($this->messages);
 
         $result = app(SessionCloser::class)->close(
             $session,
@@ -666,7 +708,7 @@ class ChatInterface extends Component
             ],
             'yellow' => [
                 "Je comprends que ça t'ait pesé. Qu'est-ce qui t'a le plus dérangé aujourd'hui ?",
-                "On peut respirer ensemble si tu veux : on inspire 4 secondes, on garde 4 secondes, on souffle 4 secondes. Tu veux essayer ?",
+                self::SQUARE_BREATHING_FALLBACK,
                 "Ça a l'air d'être un moment compliqué. Tu veux m'en dire un peu plus ?",
             ],
             default  => [
@@ -777,6 +819,29 @@ class ChatInterface extends Component
     public static function rateLimitKey(int $childId): string
     {
         return 'chat-child:' . $childId;
+    }
+
+    /** Clé RateLimiter des réponses de Care (appels au modèle) par enfant. */
+    public static function replyRateLimitKey(int $childId): string
+    {
+        return 'chat-child-reply:' . $childId;
+    }
+
+    /**
+     * Historique transmis au modèle : rôles « user » et « assistant » seuls (jamais « system »),
+     * contenu texte borné, derniers échanges seulement, accueil de Care retiré en tête.
+     */
+    public static function modelHistory(array $messages): array
+    {
+        return collect($messages)
+            ->filter(fn ($m) => is_array($m)
+                && in_array($m['role'] ?? null, ['user', 'assistant'], true)
+                && is_string($m['content'] ?? null))
+            ->map(fn ($m) => ['role' => $m['role'], 'content' => mb_substr($m['content'], 0, self::MAX_MESSAGE_CHARS)])
+            ->take(-self::MAX_HISTORY_MESSAGES)
+            ->skipWhile(fn ($m) => $m['role'] === 'assistant')
+            ->values()
+            ->all();
     }
 
     public function render()

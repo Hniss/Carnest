@@ -14,13 +14,18 @@
             <span class="hidden sm:inline-block text-[11px] text-stone-500 border-l border-stone-200 pl-2.5">Avec Care</span>
         </a>
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-            <img src="{{ $avatarUrl }}"
-                 alt="Care"
-                 data-care-avatar="header"
-                 class="shrink-0 select-none"
-                 style="height: {{ $isTeen ? 40 : 64 }}px; width: auto; object-fit: contain;"
-                 height="{{ $isTeen ? 40 : 64 }}"
-                 draggable="false">
+            <span class="care-avatar care-avatar-greet shrink-0" wire:ignore
+                  style="height: {{ $isTeen ? 40 : 64 }}px; width: {{ $isTeen ? 33 : 52 }}px;">
+                <img src="{{ $avatarUrl }}"
+                     alt="Care"
+                     data-care-avatar="header"
+                     class="select-none"
+                     style="height: {{ $isTeen ? 40 : 64 }}px; width: auto; object-fit: contain;"
+                     height="{{ $isTeen ? 40 : 64 }}"
+                     draggable="false">
+                <span class="care-eyelid care-eyelid-left" aria-hidden="true"></span>
+                <span class="care-eyelid care-eyelid-right" aria-hidden="true"></span>
+            </span>
             <span class="text-sm text-stone-500 hidden sm:inline">
                 Bonjour, <span class="text-stone-900 font-medium">{{ auth('child')->user()->name }}</span>
             </span>
@@ -58,6 +63,49 @@
                     </div>
                 @endif
             </div>
+
+            @if (($msg['exercise'] ?? null) && isset(\App\Livewire\Child\ChatInterface::BREATHING_PHASES[$msg['exercise']]))
+                <div wire:key="breathing-{{ $loop->index }}" wire:ignore
+                     class="care-breathing animate-fade-up"
+                     data-breathing="{{ $msg['exercise'] }}"
+                     data-breathing-phases="{{ json_encode(\App\Livewire\Child\ChatInterface::BREATHING_PHASES[$msg['exercise']]) }}"
+                     x-data="{
+                        phases: JSON.parse($el.dataset.breathingPhases), cycles: 4,
+                        cycle: 1, index: 0, left: 0, running: false, done: false, timer: null,
+                        get phase() { return this.phases[this.index]; },
+                        get big() { return this.running && ['in', 'hold'].includes(this.phase.scale); },
+                        enter(i) { this.index = i; this.left = this.phases[i].seconds; },
+                        start() {
+                            clearInterval(this.timer);
+                            window.dispatchEvent(new CustomEvent('care-breathing-start', { detail: this.$el }));
+                            this.cycle = 1; this.done = false; this.running = true; this.enter(0);
+                            this.timer = setInterval(() => this.tick(), 1000);
+                        },
+                        tick() {
+                            if (--this.left > 0) return;
+                            if (this.index + 1 < this.phases.length) return this.enter(this.index + 1);
+                            if (this.cycle < this.cycles) { this.cycle++; return this.enter(0); }
+                            this.stop(); this.done = true;
+                        },
+                        stop() { clearInterval(this.timer); this.running = false; },
+                     }"
+                     x-init="start()"
+                     x-on:care-breathing-start.window="$event.detail !== $el && running && stop()">
+                    <div class="care-breathing-stage">
+                        <img src="{{ $avatarUrl }}" alt="Care respire avec toi" class="care-breathing-avatar select-none"
+                             :class="big ? 'is-big' : ''"
+                             :style="running ? `transition-duration: ${phase.seconds}s` : ''"
+                             height="120" draggable="false">
+                    </div>
+                    <div class="care-breathing-text" aria-live="polite">
+                        <p class="care-breathing-label" x-text="running ? phase.label : (done ? 'Terminé, tu peux recommencer quand tu veux' : 'En pause')"></p>
+                        <p class="care-breathing-count" x-show="running"><span x-text="left"></span> s · tour <span x-text="cycle"></span> sur <span x-text="cycles"></span></p>
+                        <button type="button" class="care-breathing-btn" x-on:mousedown.prevent
+                                x-on:click="running ? stop() : start()"
+                                x-text="running ? 'Arrêter' : 'Recommencer'"></button>
+                    </div>
+                </div>
+            @endif
         @endforeach
 
         @if ($isTyping)
@@ -135,6 +183,62 @@
         </div>
     </div>
     @endif
+
+    <style>
+        .care-avatar { position: relative; display: inline-block; transform-origin: 50% 100%; }
+        .care-avatar img { display: block; }
+        .care-avatar-greet { animation: care-greet 1.6s ease-out 0.3s 1 both; }
+        @keyframes care-greet {
+            0%   { transform: translateY(0) rotate(0); }
+            15%  { transform: translateY(-6%) rotate(-9deg); }
+            35%  { transform: translateY(0) rotate(8deg); }
+            55%  { transform: translateY(-4%) rotate(-7deg); }
+            75%  { transform: translateY(0) rotate(4deg); }
+            100% { transform: translateY(0) rotate(0); }
+        }
+        .care-eyelid {
+            position: absolute; width: 19.5%; height: 17%; top: 47.4%;
+            background: #147b6b; border-radius: 50%; box-shadow: inset 0 -2px 0 rgba(5, 47, 42, .55);
+            transform: scaleY(0); transform-origin: 50% 0;
+            animation: care-blink 5.2s ease-in-out 2.2s infinite;
+        }
+        .care-eyelid-left  { left: 21.8%; }
+        .care-eyelid-right { left: 54.1%; }
+        @keyframes care-blink {
+            0%, 93%, 100% { transform: scaleY(0); }
+            95.5%, 96.5%  { transform: scaleY(1); }
+        }
+        .care-breathing {
+            display: flex; align-items: center; gap: 1rem;
+            margin-left: 2.25rem; max-width: 26rem; padding: 1rem 1.25rem;
+            background: #fff; border: 1px solid #e7e5e4; border-radius: 1rem;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+        }
+        .care-breathing-stage { flex-shrink: 0; width: 96px; height: 118px; display: flex; align-items: flex-end; justify-content: center; }
+        .care-breathing-avatar {
+            height: 96px; width: auto; transform: scale(1); transform-origin: 50% 100%;
+            transition-property: transform; transition-timing-function: ease-in-out; transition-duration: .6s;
+        }
+        .care-breathing-avatar.is-big { transform: scale(1.22); }
+        .care-breathing-text { min-width: 0; }
+        .care-breathing-label { font-size: 1.375rem; font-weight: 700; color: #0f5f52; line-height: 1.3; }
+        .care-breathing-count { margin-top: .125rem; font-size: .875rem; color: #57534e; font-variant-numeric: tabular-nums; }
+        .care-breathing-btn {
+            margin-top: .625rem; min-height: 44px; padding: .5rem 1rem; border-radius: 9999px;
+            border: 1px solid #d6d3d1; background: #fff; color: #44403c; font-size: .875rem; font-weight: 600;
+        }
+        .care-breathing-btn:focus-visible { outline: 3px solid rgba(20, 123, 107, .35); outline-offset: 2px; }
+        @media (max-width: 480px) {
+            .care-breathing { margin-left: 0; gap: .75rem; padding: .875rem 1rem; }
+            .care-breathing-stage { width: 80px; height: 100px; }
+            .care-breathing-avatar { height: 80px; }
+            .care-breathing-label { font-size: 1.2rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .care-avatar-greet, .care-eyelid { animation: none !important; }
+            .care-breathing-avatar, .care-breathing-avatar.is-big { transition: none !important; transform: none !important; }
+        }
+    </style>
 </div>
 
 {{--
@@ -159,10 +263,15 @@
     const messagesEl = document.getElementById('messages');
     const scrollDown = () => requestAnimationFrame(() => {
         if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+        const page = document.scrollingElement || document.documentElement;
+        page.scrollTop = page.scrollHeight;
     });
 
     if (messagesEl) {
-        new MutationObserver(scrollDown).observe(messagesEl, { childList: true, subtree: true });
+        new MutationObserver((mutations) => {
+            if (mutations.some((m) => !(m.target.closest && m.target.closest('[data-breathing]')))) scrollDown();
+        }).observe(messagesEl, { childList: true, subtree: true });
+        window.addEventListener('load', scrollDown);
         scrollDown();
     }
     $wire.on('scroll-bottom', scrollDown);

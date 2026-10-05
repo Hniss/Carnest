@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'chat/close',
         ]);
 
+        // Audit sécurité 2026-10-05 (F4) — un compte désactivé est déconnecté à la requête suivante.
+        $middleware->web(append: [
+            \App\Http\Middleware\LogoutDeactivatedAccounts::class,
+        ]);
+
         // Lot 1 (MVP v3) — cloisonnement par rôle : role:admin / role:referent / role:parent.
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,

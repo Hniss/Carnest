@@ -5,10 +5,10 @@ namespace App\Livewire\Referent;
 use App\Livewire\Concerns\ResolvesReferentAccess;
 use App\Models\ReferentDelegation;
 use App\Models\School;
-use App\Models\User;
 use App\Services\Audit;
 use App\Services\Notifier;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -41,18 +41,17 @@ class Delegation extends Component
 
     private function candidates()
     {
-        return User::query()
-            ->where('role', '!=', 'parent')
-            ->where('id', '!=', Auth::id())
-            ->whereHas('schools')
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role']);
+        return $this->school->users()
+            ->where('users.role', '!=', 'parent')
+            ->where('users.id', '!=', Auth::id())
+            ->orderBy('users.name')
+            ->get(['users.id', 'users.name', 'users.email', 'users.role']);
     }
 
     public function create(): void
     {
         $this->validate([
-            'delegateId' => ['required', 'integer', 'exists:users,id'],
+            'delegateId' => ['required', 'integer', Rule::in($this->candidates()->pluck('id')->all())],
             'startDate'  => ['required', 'date'],
             'endDate'    => ['required', 'date', 'after_or_equal:startDate'],
         ], [], ['delegateId' => 'compte délégué', 'startDate' => 'date de début', 'endDate' => 'date de fin']);

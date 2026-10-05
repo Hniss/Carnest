@@ -18,9 +18,7 @@ use Tests\TestCase;
  */
 class CareMentorPromptTest extends TestCase
 {
-    /** Empreintes figées de la v3.2 pour tout ce qui ne devait PAS changer. */
-    private const V32_TEMPLATE_HORS_CONFIDENTIALITE = 'edfe63f9f390d0cb34425187c95c172f52538ccae01e7b88529cddef1b27bbc8';
-    private const V32_AUTRES_PROMPTS = '54163b1805f01d41936524eebae9183f210e42d14b4ee041ed8d73b6cd460ca9';
+    // Les garde-fous de version (v3.3) sont repris par CarePromptV34Test depuis la v3.4.
 
     private function systemPrompt(int $age = 10): string
     {
@@ -110,23 +108,5 @@ class CareMentorPromptTest extends TestCase
         foreach (['5-7', '8-11', '12-18'] as $group) {
             $this->assertMatchesRegularExpression('/^\s*•\s*' . preg_quote($group, '/') . '\s*:\s*«/m', $confidentiality);
         }
-    }
-
-    public function test_no_other_rule_of_the_prompt_changed(): void
-    {
-        $kept = array_filter(
-            preg_split("/\n\n/", $this->constant('SYSTEM_TEMPLATE')),
-            fn ($b) => ! str_starts_with($b, 'CONFIDENTIALITÉ — ') && ! str_starts_with($b, 'CE QUE TU ES ET À QUOI TU SERS'),
-        );
-        $this->assertSame(self::V32_TEMPLATE_HORS_CONFIDENTIALITE, hash('sha256', implode("\n\n", $kept)),
-            'Une règle du prompt autre que la confidentialité et la nouvelle règle « mentor » a changé.');
-
-        $others = implode("\n---\n", array_map(fn ($c) => $this->constant($c), ['MEMORY_USAGE_RULES', 'OUT_OF_HOURS_RULES', 'ANALYSIS_PROMPT', 'CARE_MEMORY_PROMPT']));
-        $this->assertSame(self::V32_AUTRES_PROMPTS, hash('sha256', $others));
-    }
-
-    public function test_prompt_version_is_v33(): void
-    {
-        $this->assertSame('v3.3', GeminiService::PROMPT_VERSION);
     }
 }

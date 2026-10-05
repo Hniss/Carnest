@@ -15,6 +15,7 @@ use App\Services\ChildStatusResolver;
 use App\Services\SynthesisSender;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -55,6 +56,7 @@ class AlertTreatment extends Component
     {
         $this->school = $this->resolveReferentSchool($alert->school);
         $this->alert = $alert;
+        $this->denyDelegateOnClosedAlert();
         $this->followResponsable = Auth::id();
         Audit::log('referent.alert.view', $alert);
     }
@@ -62,6 +64,23 @@ class AlertTreatment extends Component
     public function hydrate(): void
     {
         $this->school = $this->resolveReferentSchool($this->alert->school);
+        $this->denyDelegateOnClosedAlert();
+    }
+
+    /** Un délégué n'accède qu'aux alertes actives : une alerte close ou résolue lui est refusée (403). */
+    private function denyDelegateOnClosedAlert(): void
+    {
+        abort_if($this->delegateMode && ($this->alert->isClosed() || $this->alert->status === 'resolved'), 403);
+    }
+
+    /** Personnel de l'école pouvant être responsable d'un suivi (jamais un parent). */
+    private function responsables()
+    {
+        return User::query()
+            ->whereIn('id', $this->school->users()->select('users.id'))
+            ->where('role', '!=', 'parent')
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     // ── Garde-fous serveur ────────────────────────────────────────────────
@@ -159,7 +178,7 @@ class AlertTreatment extends Component
             'followStatus'      => ['required', 'in:' . implode(',', FollowUp::STATUSES)],
             'followDate'        => ['nullable', 'date', 'after_or_equal:today'],
             'followObjective'   => ['nullable', 'string', 'max:1000'],
-            'followResponsable' => ['nullable', 'integer', 'exists:users,id'],
+            'followResponsable' => ['nullable', 'integer', Rule::in($this->responsables()->pluck('id')->all())],
         ], [], ['followStatus' => 'statut', 'followDate' => 'date du prochain point', 'followObjective' => 'objectif', 'followResponsable' => 'responsable']);
 
         DB::transaction(function () {
@@ -246,11 +265,7 @@ class AlertTreatment extends Component
     {
         $this->alert->load(['child', 'lifecycle.changer', 'actions.performer', 'followUps.responsable', 'syntheses.parent']);
 
-        $responsables = User::query()
-            ->whereIn('id', $this->school->users()->select('users.id'))
-            ->where('role', '!=', 'parent')
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $responsables = $this->responsables();
 
         return view('livewire.referent.alert-treatment', [
             'school'        => $this->school,

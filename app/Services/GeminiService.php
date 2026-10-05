@@ -15,14 +15,14 @@ class GeminiService implements AIService, RawCompletionClient
      * Version du prompt système (D8 / D10) — tracée sur chaque session et chaque alerte.
      * À incrémenter à chaque modification de SYSTEM_TEMPLATE / ANALYSIS_PROMPT.
      */
-    public const PROMPT_VERSION = 'v3.3';
+    public const PROMPT_VERSION = 'v3.4';
 
     /**
      * Lot 2 §6 — empreinte SHA-256 de l'ensemble des textes de prompt (système, mémoire,
      * hors horaires, analyse, mémoire de Care). Un test dédié compare cette constante à
      * systemPromptHash() : si le prompt change sans incrément de PROMPT_VERSION, il échoue.
      */
-    public const PROMPT_HASH = '3efc7bbad8509f01c40efd93b5354646bf23a39c8da7149547166e5baaf9bfb2';
+    public const PROMPT_HASH = 'edcaed64fefaaf31046d53c01c75f7b1ec9a67b9811ee6b56856d2a705a790cd';
 
     public static function systemPromptHash(): string
     {
@@ -59,7 +59,7 @@ CONTEXTE PAYS — IMPORTANT
 LANGUE & TON
 - Réponds UNIQUEMENT en français.
 - Adapte ton langage : %s.
-- Réponses courtes : 2 à 4 phrases maximum.
+- Réponses brèves, à la portée d'un enfant : 2 à 3 phrases courtes maximum, avec une seule question à la fois. Des mots simples, pas de longue explication. En mode sécurité, la brièveté ne retire jamais l'invitation à parler à un adulte de confiance.
 - Ne mentionne JAMAIS que tu analyses des émotions, que tu classifies quoi que ce soit, ou que tu envoies des informations à un adulte automatiquement.
 
 %s
@@ -134,7 +134,7 @@ REFORMULATION — NE PAS RENFORCER LES MOTS DÉVALORISANTS
 - Évite de coller le mot dévalorisant à l'enfant. Sépare la situation et la personne.
 
 ACTIONS CONCRÈTES (micro-aides)
-- Stress fort, mal de ventre, difficulté à dormir → propose UNE micro-action (respiration 4-4-4, poser une main sur le ventre, écrire ce qui inquiète) ET suggère d'en parler à un adulte de confiance si ça dure.
+- Stress fort, mal de ventre, difficulté à dormir → propose UNE micro-action (respiration carrée : inspirer 4 secondes, retenir 4, souffler 4, attendre 4 ; ou respiration 4-7-8 : inspirer 4 secondes, retenir 7, souffler 8 ; poser une main sur le ventre ; écrire ce qui inquiète) ET suggère d'en parler à un adulte de confiance si ça dure. Quand tu proposes une respiration, nomme-la (« respiration carrée » ou « respiration 4-7-8 ») et donne son rythme exact.
 - Tristesse répétée ou isolement → reconnais la difficulté, puis invite à penser à UN adulte de confiance.
 - Ne donne JAMAIS de conseil médical.
 
@@ -242,11 +242,14 @@ PROTOCOLE DE FIN DE RÉPONSE — OBLIGATOIRE
 ALERT_TYPE: <none|harcelement|detresse|pensees_negatives|danger|isolement|stress|humiliation_adulte>
 ZONE: <green|yellow|orange|red>
 RESUME: <résumé de l'échange, 1 à 2 phrases, SUR UNE SEULE LIGNE, en français, à la troisième personne>
+EXERCICE: <none|carree|478>
 
-Ces trois lignes sont techniques : elles sont retirées de ta réponse avant qu'elle soit montrée à l'enfant. Elles n'apparaissent qu'une seule fois, tout à la fin, et tu n'en parles jamais à l'enfant.
+Ces quatre lignes sont techniques : elles sont retirées de ta réponse avant qu'elle soit montrée à l'enfant. Elles n'apparaissent qu'une seule fois, tout à la fin, et tu n'en parles jamais à l'enfant.
+Règle de l'EXERCICE : écris « carree » si ta réponse propose la respiration carrée, « 478 » si elle propose la respiration 4-7-8, sinon « none ».
 Règles du RESUME :
 - Il couvre TOUTE la conversation depuis son début, pas seulement ton dernier tour. Tu le réécris en entier à chaque réponse : il remplace le précédent.
 - Il est destiné à l'adulte référent : mentionne le ressenti dominant et tout signal de risque, comme le ferait un résumé de fin de session.
+- Aucun prénom ni nom d'une autre personne que l'enfant. Un autre enfant devient « un camarade » ; un adulte cité devient sa fonction telle que l'enfant la donne (« un enseignant », « un surveillant », « un parent ») ou, à défaut, « un adulte ». Le prénom de l'élève concerné reste. Exemple : l'enfant écrit « Adam m'a frappé » → « Un camarade a frappé Yassine. »
 - Une seule ligne, jamais de retour à la ligne, jamais de liste, jamais de titre.
 
 Règles de classification (à utiliser en interne, ne jamais expliquer à l'enfant) :
@@ -307,7 +310,7 @@ PROMPT;
 
     private const ANALYSIS_PROMPT = <<<'PROMPT'
 Analyse l'ENSEMBLE de la conversation ci-dessus et produis :
-1. Un résumé bienveillant en 2-3 phrases (pour l'administrateur de l'école, jamais affiché à l'enfant). Mentionne le ressenti dominant et tout signal de risque éventuel.
+1. Un résumé bienveillant en 2-3 phrases (pour l'administrateur de l'école, jamais affiché à l'enfant). Mentionne le ressenti dominant et tout signal de risque éventuel. Aucun prénom ni nom d'une autre personne que l'enfant : un autre enfant devient « un camarade », un adulte cité devient sa fonction telle que l'enfant la donne (« un enseignant », « un surveillant », « un parent ») ou, à défaut, « un adulte ». Le prénom de l'élève concerné reste. Exemple : l'enfant écrit « Adam m'a frappé » → « Un camarade a frappé Yassine. »
 2. Le type d'alerte le plus pertinent s'il y en a un.
 3. La zone émotionnelle finale (en gardant le pire niveau atteint pendant la session si la fin redescend artificiellement).
 
@@ -620,7 +623,7 @@ PROMPT;
      * Début d'une ligne technique du protocole de fin de réponse, y compris mise en forme
      * (« **RESUME:** », « ## ZONE : »). Sa première occurrence ferme le texte vu par l'enfant.
      */
-    private const TECHNICAL_LINE = '/^[ \t]*[*_#>`]*[ \t]*(?:ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)[*_`]*[ \t]*:/miu';
+    private const TECHNICAL_LINE = '/^[ \t]*[*_#>`]*[ \t]*(?:ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY|EXERCICE)[*_`]*[ \t]*:/miu';
 
     /**
      * Parse une réponse de tour : extrait [ALERTE_CRITIQUE], ALERT_TYPE, ZONE et nettoie le message.
@@ -683,6 +686,12 @@ PROMPT;
             }
         }
 
+        // v3.4 — exercice de respiration proposé (guide l'avatar de Care côté enfant).
+        $exercise = null;
+        if (preg_match('/^\s*EXERCICE\s*:\s*(carree|carrée|478|4-7-8)\s*$/miu', $text, $m)) {
+            $exercise = in_array(mb_strtolower($m[1]), ['478', '4-7-8'], true) ? '478' : 'carree';
+        }
+
         // Phase 2 — Le message visible s'arrête à la première ligne technique : rien de ce
         // qui la suit n'arrive à l'enfant (résumé destiné aux adultes, réponse répétée...).
         if (preg_match(self::TECHNICAL_LINE, $text, $m, PREG_OFFSET_CAPTURE)) {
@@ -707,6 +716,7 @@ PROMPT;
             'is_critical'    => $isCritical,
             'low_confidence' => $lowConfidence,
             'summary'        => $summary,
+            'exercise'       => $exercise,
         ];
     }
 
@@ -739,11 +749,11 @@ PROMPT;
         // le prompt système réclame désormais une ligne RESUME à la fin de CHAQUE
         // réponse, et elle ne doit jamais se retrouver collée dans le résumé final.
         $summary = '';
-        if (preg_match('/SUMMARY:\s*(.+?)(?=\s*(?:ALERT_TYPE:|ZONE:|R[EÉeé]SUM[EÉeé]:)|$)/siu', $text, $m)) {
+        if (preg_match('/SUMMARY:\s*(.+?)(?=\s*(?:ALERT_TYPE:|ZONE:|R[EÉeé]SUM[EÉeé]:|EXERCICE:)|$)/siu', $text, $m)) {
             $summary = trim($m[1]);
         }
         $summary = trim((string) preg_replace(
-            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY)\s*:.*$/miu',
+            '/^\s*(ALERT_TYPE|ZONE|RISK_LEVEL|SCORE|CATEGORY|CONFIDENCE|R[EÉeé]SUM[EÉeé]|SUMMARY|EXERCICE)\s*:.*$/miu',
             '',
             $summary
         ));

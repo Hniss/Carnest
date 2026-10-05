@@ -32,6 +32,17 @@ class ChatSession extends Model
         ];
     }
 
+    /** Retour des pédopsychiatres (2026-10-05) : aucun nom d'un tiers connu de l'école dans le résumé. */
+    protected static function booted(): void
+    {
+        static::saving(function (self $session) {
+            if ($session->isDirty('ai_summary') && $session->ai_summary !== null) {
+                $session->ai_summary = app(\App\Services\ThirdPartyNameScrubber::class)
+                    ->scrub($session->ai_summary, Child::find($session->child_id));
+            }
+        });
+    }
+
     public function child(): BelongsTo
     {
         return $this->belongsTo(Child::class);

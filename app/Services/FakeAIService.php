@@ -17,7 +17,7 @@ class FakeAIService extends GeminiService
 {
     public const MODEL = 'fake-demo';
 
-    private const YELLOW_WORDS = ['triste', 'fatigu', 'stress', 'peur', 'inquiet', 'inquiète', 'nerveux', 'nerveuse', 'contrôle', 'controle', 'seul', 'seule'];
+    private const YELLOW_WORDS = ['dormir', 'triste', 'fatigu', 'stress', 'peur', 'inquiet', 'inquiète', 'nerveux', 'nerveuse', 'contrôle', 'controle', 'seul', 'seule'];
     private const ORANGE_WORDS = ['moque', 'moquent', 'embête', 'embêtent', 'insulte', 'frappe', 'frappé', 'tape', 'harcèle', 'harcele', 'menace', 'personne ne veut'];
 
     public function __construct()
@@ -36,9 +36,12 @@ class FakeAIService extends GeminiService
         $message = match ($zone) {
             'red'    => 'Ce que tu me dis compte beaucoup et je te prends au sérieux. Tu n\'as pas à porter ça tout seul. Le plus important maintenant, c\'est d\'en parler tout de suite à un adulte de confiance : un parent, un enseignant ou le responsable de l\'école. Est-ce qu\'il y a un adulte à qui tu peux parler aujourd\'hui ?',
             'orange' => 'Merci de me le dire, ce n\'est pas facile à raconter. Ce que tu vis n\'est pas normal et tu n\'y es pour rien. Est-ce qu\'un adulte de l\'école est au courant ?',
-            'yellow' => 'Je comprends, ça peut peser. Tu veux me dire ce qui te fait ressentir ça en ce moment ?',
+            'yellow' => $this->sleepless($last)
+                ? 'Je comprends, ça peut peser. On essaie la respiration 4-7-8 : on inspire 4 secondes, on retient 7, on souffle 8. Tu veux essayer ?'
+                : 'Je comprends, ça peut peser. On essaie la respiration carrée : on inspire 4 secondes, on retient 4, on souffle 4, on attend 4. Tu veux essayer ?',
             default  => $this->greenReply($last),
         };
+        $exercise = $zone === 'yellow' ? ($this->sleepless($last) ? '478' : 'carree') : null;
 
         return [
             'message'        => $message,
@@ -50,6 +53,7 @@ class FakeAIService extends GeminiService
             // zone et le type. Le faux fournisseur en produit un équivalent pour que la
             // session porte un résumé exploitable à tout instant, y compris en démo.
             'summary'        => $this->runningSummary($zone),
+            'exercise'       => $exercise,
             'tokens'         => $this->fakeTokens($messages, $message),
             'model'          => self::MODEL,
         ];
@@ -180,6 +184,13 @@ class FakeAIService extends GeminiService
         }
 
         return ['green', null];
+    }
+
+    private function sleepless(string $text): bool
+    {
+        $t = mb_strtolower($text);
+
+        return str_contains($t, 'dormir') || str_contains($t, 'sommeil') || str_contains($t, 'dors pas');
     }
 
     private function greenReply(string $last): string

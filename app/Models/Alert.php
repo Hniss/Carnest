@@ -55,6 +55,17 @@ class Alert extends Model
         return $this->belongsTo(ChatSession::class, 'session_id');
     }
 
+    /** Retour des pédopsychiatres (2026-10-05) : aucun nom d'un tiers connu de l'école dans le résumé. */
+    protected static function booted(): void
+    {
+        static::saving(function (self $alert) {
+            if ($alert->isDirty('summary') && $alert->summary !== null) {
+                $alert->summary = app(\App\Services\ThirdPartyNameScrubber::class)
+                    ->scrub($alert->summary, Child::find($alert->child_id));
+            }
+        });
+    }
+
     public function child(): BelongsTo
     {
         return $this->belongsTo(Child::class);

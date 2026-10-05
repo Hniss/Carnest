@@ -27,22 +27,6 @@ class Dashboard extends Component
     public const MIN_CLASS_SIZE = 5;
     public const VITAL_ACK_MINUTES = 60;
 
-    /**
-     * D10 (v3) — cloisonnement multi-école : l'alerte doit appartenir à une
-     * école de l'utilisateur connecté, sinon 403. Conservé pour compatibilité ;
-     * l'interface administration n'affiche plus d'alerte individuelle.
-     */
-    public function resolveAlert(int $alertId): void
-    {
-        $alert = Alert::find($alertId);
-        abort_unless($alert, 404);
-
-        $userSchoolIds = Auth::user()->schools()->pluck('schools.id');
-        abort_unless($userSchoolIds->contains($alert->school_id), 403);
-
-        $alert->update(['status' => 'resolved']);
-    }
-
     public function render()
     {
         $user   = Auth::user();

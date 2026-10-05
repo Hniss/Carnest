@@ -60,4 +60,18 @@ class FakeAIServiceTest extends TestCase
         $this->assertSame('pensees_negatives', $result['type']);
         $this->assertNotEmpty($result['signals']);
     }
+
+    public function test_fake_yellow_reply_proposes_a_named_breathing_exercise(): void
+    {
+        $ai = new FakeAIService();
+
+        $stress = $ai->chat([['role' => 'user', 'content' => 'je suis stressé pour le contrôle']], 9, 'f');
+        $this->assertSame('yellow', $stress['zone']);
+        $this->assertSame('carree', $stress['exercise']);
+        $this->assertStringContainsString('respiration carrée', $stress['message']);
+
+        $sleep = $ai->chat([['role' => 'user', 'content' => 'je n\'arrive pas à dormir']], 9, 'f');
+        $this->assertSame('478', $sleep['exercise']);
+        $this->assertStringContainsString('4-7-8', $sleep['message']);
+    }
 }

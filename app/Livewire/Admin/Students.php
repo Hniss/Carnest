@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -88,7 +89,25 @@ class Students extends Component
     {
         $this->form->validate();
 
-        $child = DB::transaction(function () use ($provisioner) {
+        try {
+            $child = $this->persist($provisioner);
+        } catch (ValidationException $e) {
+            foreach ($e->errors() as $field => $messages) {
+                $this->addError('form.' . $field, $messages[0]);
+            }
+
+            return;
+        }
+
+        $this->showForm = false;
+        $this->flash = $child->deactivated_at
+            ? 'Élève enregistré. Sans consentement parental, le compte reste désactivé.'
+            : 'Élève enregistré.';
+    }
+
+    private function persist(ParentAccountProvisioner $provisioner): Child
+    {
+        return DB::transaction(function () use ($provisioner) {
             $isNew = $this->form->id === null;
             $child = $isNew ? new Child(['school_id' => $this->school->id]) : $this->own($this->form->id);
 
@@ -118,11 +137,6 @@ class Students extends Component
 
             return $child;
         });
-
-        $this->showForm = false;
-        $this->flash = $child->deactivated_at
-            ? 'Élève enregistré. Sans consentement parental, le compte reste désactivé.'
-            : 'Élève enregistré.';
     }
 
     public function deactivate(int $id): void

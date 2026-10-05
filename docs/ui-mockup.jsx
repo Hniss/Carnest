@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const MOCK_ACCOUNTS = [
-  { email: "enfant@carenest.ma", password: "demo123", role: "child", name: "Yassine", age: 10, classe: "CM2" },
-  { email: "admin@carenest.ma",  password: "admin123", role: "admin", name: "Mme Benali", school: "École Agdal" },
+  { email: "enfant@exemple.test", password: "fictif-enfant", role: "child", name: "Yassine", age: 10, classe: "CM2" },
+  { email: "admin@exemple.test",  password: "fictif-admin", role: "admin", name: "Mme Benali", school: "École Agdal" },
 ];
 
 const MOCK_ALERTS = [
@@ -413,8 +413,8 @@ function Login({ onLogin }) {
         </button>
         {error && <div className="login-error">⚠️ {error}</div>}
         <div className="demo-hint">
-          <b>Compte enfant :</b> enfant@carenest.ma / demo123<br />
-          <b>Compte admin :</b> admin@carenest.ma / admin123
+          <b>Compte enfant :</b> enfant@exemple.test / fictif-enfant<br />
+          <b>Compte admin :</b> admin@exemple.test / fictif-admin
         </div>
       </div>
     </div>

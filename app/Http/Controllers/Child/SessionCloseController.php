@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Child;
 
 use App\Http\Controllers\Controller;
+use App\Livewire\Child\ChatInterface;
 use App\Models\Alert;
 use App\Models\ChatSession;
 use App\Services\SessionCloser;
@@ -52,11 +53,8 @@ class SessionCloseController extends Controller
 
         // On retire le 1er message (welcome assistant) pour aligner le contexte
         // d'analyse sur celui de ChatInterface::endSession().
-        $messages = collect($data['messages'] ?? [])
-            ->map(fn ($m) => ['role' => $m['role'], 'content' => $m['content']])
-            ->skipWhile(fn ($m) => $m['role'] === 'assistant')
-            ->values()
-            ->all();
+        // F6 (audit 2026-10-05) — même historique borné que le chat (rôles, longueur, nombre).
+        $messages = ChatInterface::modelHistory($data['messages'] ?? []);
 
         $closer->close(
             $session,

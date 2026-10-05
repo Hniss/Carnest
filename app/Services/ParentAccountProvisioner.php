@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Lot 1 §6 — création (ou rattachement) du compte parent à la création d'un élève :
@@ -31,6 +32,12 @@ class ParentAccountProvisioner
         $parent = User::where('email', $email)->first();
 
         if ($parent) {
+            if (! $parent->isParent()) {
+                throw ValidationException::withMessages([
+                    'parent_email' => 'Cette adresse appartient déjà à un compte du personnel : saisissez l\'adresse personnelle du parent.',
+                ]);
+            }
+
             return $parent;
         }
 
@@ -79,6 +86,10 @@ class ParentAccountProvisioner
      */
     public function syncActivation(User $parent): void
     {
+        if (! $parent->isParent()) {
+            return;
+        }
+
         $hasConsent = $parent->consentedChildren()->exists();
 
         if (! $hasConsent && $parent->deactivated_at === null) {

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 #[ObservedBy(ChildObserver::class)]
 class Child extends Authenticatable
@@ -139,5 +140,15 @@ class Child extends Authenticatable
     public function isDeactivated(): bool
     {
         return $this->deactivated_at !== null;
+    }
+
+    /** Désactiver un compte élève invalide aussi son cookie « se souvenir de moi ». */
+    protected static function booted(): void
+    {
+        static::saving(function (self $child) {
+            if ($child->isDirty('deactivated_at') && $child->deactivated_at !== null) {
+                $child->setRememberToken(Str::random(60));
+            }
+        });
     }
 }

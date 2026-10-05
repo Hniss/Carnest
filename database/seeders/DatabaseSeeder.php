@@ -28,6 +28,10 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->environment('production') && env('CARENEST_ALLOW_DEMO_SEED') !== true) {
+            throw new \RuntimeException('Données de démonstration refusées en production (CARENEST_ALLOW_DEMO_SEED=true pour forcer).');
+        }
+
         $adminPassword = $this->demoPassword('DEMO_ADMIN_PASSWORD', 'administrateur');
         $childPassword = $this->demoPassword('DEMO_CHILD_PASSWORD', 'élèves');
         $staffPassword = env('DEMO_STAFF_PASSWORD') ?: $adminPassword;

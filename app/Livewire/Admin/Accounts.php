@@ -4,10 +4,12 @@ namespace App\Livewire\Admin;
 
 use App\Models\School;
 use App\Models\User;
+use App\Notifications\AccountEmailChanged;
 use App\Services\Audit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -133,15 +135,29 @@ class Accounts extends Component
             return;
         }
 
-        DB::transaction(function () use ($u) {
+        $oldEmail = $u->email;
+        $newEmail = Str::lower(trim($this->email));
+        $emailChanged = Str::lower($oldEmail) !== $newEmail;
+
+        DB::transaction(function () use ($u, $newEmail, $emailChanged) {
             $u->update([
                 'name'  => trim($this->name),
-                'email' => Str::lower(trim($this->email)),
+                'email' => $newEmail,
                 'phone' => $this->phone !== '' ? trim($this->phone) : null,
                 'role'  => $this->role,
             ]);
             $this->school->users()->updateExistingPivot($u->id, ['role' => $this->role === 'referent' ? 'referent' : 'director']);
+
+            // F9 (audit 2026-10-05) — nouvelle adresse non vérifiée, accès ouverts coupés.
+            if ($emailChanged) {
+                $u->forceFill(['email_verified_at' => null])->setRememberToken(Str::random(60));
+                $u->save();
+                DB::table('sessions')->where('user_id', $u->id)->delete();
+            }
         });
+        if ($emailChanged) {
+            Notification::route('mail', $oldEmail)->notify(new AccountEmailChanged($u->name));
+        }
         Audit::log('admin.account.update', $u, ['school_id' => $this->school->id]);
         $this->cancelEdit();
         $this->flash = 'Compte mis à jour.';

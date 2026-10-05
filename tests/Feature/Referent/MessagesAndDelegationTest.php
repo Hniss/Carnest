@@ -57,7 +57,7 @@ class MessagesAndDelegationTest extends TestCase
         $school   = School::factory()->create();
         $ref      = $this->makeReferent($school);
         $delegate = User::factory()->create(['role' => 'admin']);
-        School::factory()->create()->users()->attach($delegate->id, ['role' => 'staff']);
+        $school->users()->attach($delegate->id, ['role' => 'staff']);
         $this->actingAs($ref);
 
         $c = Livewire::test(Delegation::class)

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 #[Fillable(['name', 'email', 'password', 'role', 'phone', 'email_verified_at', 'deactivated_at'])]
 #[Hidden(['password', 'remember_token'])]
@@ -32,6 +33,16 @@ class User extends Authenticatable
     public function isDeactivated(): bool
     {
         return $this->deactivated_at !== null;
+    }
+
+    /** Désactiver un compte invalide aussi son cookie « se souvenir de moi ». */
+    protected static function booted(): void
+    {
+        static::saving(function (self $user) {
+            if ($user->isDirty('deactivated_at') && $user->deactivated_at !== null) {
+                $user->setRememberToken(Str::random(60));
+            }
+        });
     }
 
     // ── Rôles ─────────────────────────────────────────────────────────────

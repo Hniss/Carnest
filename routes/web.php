@@ -72,6 +72,8 @@ Route::post('/logout', function () {
 Route::get('/child/login', ChildLogin::class)->middleware('throttle:10,1,login-child')->name('child.login');
 Route::post('/child/logout', function () {
     auth('child')->logout();
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
     return redirect()->route('child.login');
 })->name('child.logout');
 
