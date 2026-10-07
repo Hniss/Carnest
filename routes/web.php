@@ -8,6 +8,8 @@ use App\Livewire\Admin\Settings as AdminSettings;
 use App\Livewire\Admin\Students as AdminStudents;
 use App\Livewire\Child\ChatInterface;
 use App\Livewire\Child\Login as ChildLogin;
+use App\Livewire\ParentSpace\AlertShow as ParentAlertShow;
+use App\Livewire\ParentSpace\Alerts as ParentAlerts;
 use App\Livewire\ParentSpace\Consent as ParentConsent;
 use App\Livewire\ParentSpace\Home as ParentHome;
 use App\Livewire\ParentSpace\Journal as ParentJournal;
@@ -71,6 +73,8 @@ Route::middleware(['auth', 'role:referent'])->prefix('dashboard-referent')->name
 Route::middleware(['auth', 'role:parent'])->prefix('parent')->name('parent.')->group(function () {
     Route::get('/', ParentHome::class)->name('home');
     Route::get('/journal', ParentJournal::class)->name('journal');
+    Route::get('/alertes', ParentAlerts::class)->name('alerts');
+    Route::get('/alertes/{alert}', ParentAlertShow::class)->whereNumber('alert')->name('alerts.show');
     Route::get('/messages', ParentMessages::class)->name('messages');
     Route::get('/consentement', ParentConsent::class)->name('consent');
     Route::get('/mes-donnees', ParentMyData::class)->name('my-data');

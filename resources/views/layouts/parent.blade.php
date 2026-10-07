@@ -24,12 +24,15 @@
         ['label' => 'Consentement',  'icon' => 'shield-check',   'route' => 'parent.consent', 'active' => request()->routeIs('parent.consent')],
         ['label' => 'Mes données',   'icon' => 'file-text',      'route' => 'parent.my-data', 'active' => request()->routeIs('parent.my-data')],
     ];
+    // Phase pilote (hp-v2nf) : accès « Alertes » dans la barre haute tant que l'interrupteur est
+    // actif. Les barres de navigation gardent leurs 5 entrées (place comptée en mobile et en desktop).
+    $alertsOn = (bool) config('carenest.parent_alerts');
 @endphp
 <div class="min-h-dvh flex flex-col">
 
     {{-- Barre haute --}}
     <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div class="max-w-3xl lg:max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <a href="{{ route('parent.home') }}" wire:navigate class="inline-flex items-center gap-2 shrink-0">
                 <x-carenest-logo variant="full" class="h-7 w-auto shrink-0" />
                 <span class="hidden sm:inline lg:hidden xl:inline whitespace-nowrap text-xs text-stone-500 border-l border-stone-200 pl-2">Espace parent</span>
@@ -42,6 +45,13 @@
                 @endforeach
             </nav>
             <div class="flex items-center gap-1">
+                @if ($alertsOn)
+                    <a href="{{ route('parent.alerts') }}" wire:navigate aria-label="Alertes" title="Alertes"
+                       class="btn-ghost btn-sm {{ request()->routeIs('parent.alerts*') ? 'text-brand-700' : '' }}">
+                        <x-icon name="alert-triangle" size="18" />
+                        <span class="hidden sm:inline lg:hidden">Alertes</span>
+                    </a>
+                @endif
                 <livewire:shared.notification-bell />
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf

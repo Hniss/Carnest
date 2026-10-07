@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\SmsSender;
 use App\Enums\AlertType;
 use App\Mail\AlertPagedMail;
+use App\Mail\ParentAlertMail;
 use App\Models\Alert;
 use App\Models\AlertNotification;
 use App\Models\ReferentDelegation;
@@ -104,6 +105,10 @@ class AlertPager
         // doit pas voir un palier marqué servi alors que rien n'est parti.
         $reached = $served;
 
+        if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT) {
+            $this->notifyParents($alert);
+        }
+
         if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT && $referent) {
             $this->notifyApp($alert, $referent, 0, 'alerte', 'Une alerte attend votre accusé', 'Un signal vient d\'être détecté. Prenez-en connaissance dans votre espace référent.', $link);
             $this->sendEmail($alert, $referent, 0);
@@ -154,7 +159,8 @@ class AlertPager
         $pending = Alert::query()
             ->where('status', '!=', 'resolved')
             ->whereNull('escalation_exhausted_at')
-            ->whereHas('notifications', fn ($q) => $q->where('escalation_step', 0)->where('channel', 'app')->whereNotNull('recipient_id')->whereNull('acked_at'))
+            ->whereHas('notifications', fn ($q) => $q->where('escalation_step', 0)->where('channel', 'app')->whereNotNull('recipient_id')->whereNull('acked_at')
+                ->whereHas('recipient', fn ($r) => $r->where('role', '!=', 'parent')))
             ->whereDoesntHave('notifications', fn ($q) => $q->whereNotNull('acked_at'))
             ->with('school.setting')
             ->get();
@@ -281,6 +287,52 @@ class AlertPager
         Audit::log($auditAction, $alert, ['school_id' => $school->id]);
     }
 
+    /**
+     * Phase pilote (hp-v2nf) : chaque parent au consentement ACTIF pour CET enfant, compte
+     * actif, est prévenu au même palier que le référent, pour tous les types d'alerte.
+     * Notification interne (sans résumé : il se lit dans l'espace parent) + e-mail sans
+     * aucune donnée sur la situation. Un parent n'est prévenu qu'une fois par alerte, même
+     * si l'école n'a pas de référent et que page() est rappelée. Ces lignes du journal ne
+     * comptent jamais dans l'escalade (un parent n'accuse pas réception). Interrupteur :
+     * config('carenest.parent_alerts').
+     */
+    private function notifyParents(Alert $alert): void
+    {
+        if (! config('carenest.parent_alerts')) {
+            return;
+        }
+
+        $child = $alert->child;
+        if (! $child) {
+            return;
+        }
+
+        $parents = $child->consentingParents()
+            ->where('users.role', 'parent')
+            ->whereNull('users.deactivated_at')
+            ->get();
+
+        foreach ($parents as $parent) {
+            $alreadyNotified = AlertNotification::where('alert_id', $alert->id)
+                ->where('recipient_id', $parent->id)
+                ->where('channel', 'app')
+                ->exists();
+            if ($alreadyNotified) {
+                continue;
+            }
+
+            $this->notifyApp(
+                $alert, $parent, 0, 'alerte_parent',
+                'Une alerte importante concerne ' . $child->name,
+                'Prenez-en connaissance dans votre espace, puis contactez le référent de l\'école.',
+                '/parent/alertes/' . $alert->id,
+            );
+            if ($parent->email) {
+                $this->emailTo($alert, 0, $parent->email, $parent->id, ['destinataire' => 'parent'], new ParentAlertMail($alert->id));
+            }
+        }
+    }
+
     private function sendEmail(Alert $alert, User $user, int $step): void
     {
         if (! $user->email) {
@@ -306,11 +358,11 @@ class AlertPager
      * `statut` = echec), jamais comme un envoi. Seule la nature de l'erreur est notée,
      * jamais son message (il peut citer le serveur ou l'identifiant de la boîte d'envoi).
      */
-    private function emailTo(Alert $alert, int $step, string $address, ?int $recipientId, array $payload): void
+    private function emailTo(Alert $alert, int $step, string $address, ?int $recipientId, array $payload, ?Mailable $mailable = null): void
     {
         $journal = $this->journal($alert, $step, 'email', $recipientId, $payload + ['statut' => 'envoye']);
         try {
-            $mailable = new AlertPagedMail($alert->id, $step);
+            $mailable ??= new AlertPagedMail($alert->id, $step);
             $pending  = Mail::to($address);
             $this->deliver($pending, $mailable, $journal);
         } catch (\Throwable $e) {

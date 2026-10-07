@@ -268,6 +268,13 @@ backend/                         # Laravel app
   - **Corrections** : D2 case « Notifications e-mail » retirée (lue par aucun code) ; D3 e-mail en échec tracé `statut=echec`, `sent_at` vide.
   - **Tests** : 460 → 494 (`tests/Feature/SuperAdmin/*` ; tests 403 → redirection mis à jour).
 
+- [x] **Alertes au parent — phase pilote du 2026-10-07** (décision Hamza, bead hp-v2nf).
+  - **Circuit** : `AlertPager::page()` prévient AUSSI chaque parent au consentement actif pour l'enfant (compte actif), au même palier que le référent (`tierFor >= TIER_REFERENT`), tous types y compris `danger` et `humiliation_adulte`. Une seule fois par alerte (même sans référent). Le reste du circuit est inchangé ; les lignes parent du journal ne déclenchent jamais l'escalade.
+  - **Canaux** : notification interne (lien `/parent/alertes/{id}`) + e-mail `ParentAlertMail` SANS résumé ni prénom (même chemin d'envoi, échec tracé `statut=echec`). Pas de SMS. Journal `alert_notifications` (`payload.destinataire=parent` sur l'e-mail).
+  - **Écran** : `/parent/alertes` et `/parent/alertes/{id}` (lecture seule) : résumé, type, niveau, date, invitation à contacter le référent. Seulement les alertes envoyées à CE parent, consentement actif au moment de la lecture (sinon 403), `#[Locked]`, consultation auditée `parent.alert.view`. Accès par l'icône « Alertes » de la barre haute (barres de navigation inchangées) ; barre haute élargie en desktop (`lg:max-w-5xl`), « Quitter » sortait de l'écran à 1024 px.
+  - **Interrupteur** : `CARENEST_PARENT_ALERTS` (`config('carenest.parent_alerts')`, vrai par défaut) ; faux = aucune notification parent, écran en 404, icône masquée.
+  - **Tests** : 513 → 532 (`tests/Feature/ParentAlerts/*`).
+
 ### Réserves QA ouvertes (non bloquantes)
 - Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système). **Atténué V6** : le beacon de clôture (#1) ferme désormais la session dès la fermeture/actualisation de fenêtre ; `CloseIdleSessions` n'est plus que le filet ultime.
 - ~~**V6** : le canal email d'alerte critique reste différé (décision PO #2).~~ **Réglé au lot 2 v3** (`AlertPager` : e-mail + notification interne + SMS pilote ; SMTP à configurer via `MAIL_*`).
