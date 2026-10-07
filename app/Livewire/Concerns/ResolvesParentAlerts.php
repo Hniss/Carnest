@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * Phase pilote (hp-v2nf) — alertes visibles par un parent : celles qui lui ont été
- * envoyées (ligne `alert_notifications` à son nom), pour un enfant dont son consentement
- * est ACTIF au moment de la lecture. Tout le reste est refusé côté serveur (403), et
+ * envoyées (ligne `alert_notifications` à son nom), pour un enfant actif dont son
+ * consentement est ACTIF au moment de la lecture. Tout le reste est refusé côté serveur (403), et
  * l'interrupteur config('carenest.parent_alerts') éteint l'écran (404).
  */
 trait ResolvesParentAlerts
@@ -28,7 +28,7 @@ trait ResolvesParentAlerts
     protected function parentAlertsQuery(User $parent): Builder
     {
         return Alert::query()
-            ->whereIn('child_id', $parent->consentedChildren()->pluck('children.id'))
+            ->whereIn('child_id', $parent->consentedChildren()->whereNull('children.deactivated_at')->pluck('children.id'))
             ->whereHas('notifications', fn ($q) => $q->where('recipient_id', $parent->id)->where('channel', 'app'));
     }
 

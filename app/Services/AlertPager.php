@@ -105,10 +105,6 @@ class AlertPager
         // doit pas voir un palier marqué servi alors que rien n'est parti.
         $reached = $served;
 
-        if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT) {
-            $this->notifyParents($alert);
-        }
-
         if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT && $referent) {
             $this->notifyApp($alert, $referent, 0, 'alerte', 'Une alerte attend votre accusé', 'Un signal vient d\'être détecté. Prenez-en connaissance dans votre espace référent.', $link);
             $this->sendEmail($alert, $referent, 0);
@@ -133,6 +129,16 @@ class AlertPager
             }
             if ($delivered) {
                 $this->markServed($alert, $reached, self::TIER_VITAL);
+            }
+        }
+
+        // Le parent passe APRÈS le référent et la chaîne vitale : une panne de son côté ne
+        // doit jamais empêcher de prévenir l'école.
+        if ($tier >= self::TIER_REFERENT && $served < self::TIER_REFERENT) {
+            try {
+                $this->notifyParents($alert);
+            } catch (\Throwable $e) {
+                Log::error('Notification parent en échec', ['alert' => $alert->id, 'erreur' => class_basename($e)]);
             }
         }
     }
@@ -303,7 +309,7 @@ class AlertPager
         }
 
         $child = $alert->child;
-        if (! $child) {
+        if (! $child || $child->isDeactivated()) {
             return;
         }
 
@@ -363,11 +369,31 @@ class AlertPager
         $journal = $this->journal($alert, $step, 'email', $recipientId, $payload + ['statut' => 'envoye']);
         try {
             $mailable ??= new AlertPagedMail($alert->id, $step);
-            $pending  = Mail::to($address);
+            // Mail::to() construit le gestionnaire, qui applique la boîte d'envoi réglée par le
+            // super-admin : le transport est lu APRÈS, sinon on lirait celui du fichier serveur.
+            $pending = Mail::to($address);
+            $this->markIfNotDelivered($journal);
             $this->deliver($pending, $mailable, $journal);
         } catch (\Throwable $e) {
             $this->markEmailFailed($journal, $e);
         }
+    }
+
+    /**
+     * Transport `log` ou `array` (aucune boîte d'envoi réglée) : l'e-mail ne quitte pas le
+     * serveur. Le journal le dit (`statut=non_envoye`, `sent_at` vide), jamais « envoyé ».
+     */
+    private function markIfNotDelivered(AlertNotification $journal): void
+    {
+        $mailer = (string) config('mail.default');
+        if (! in_array($mailer, ['log', 'array'], true)) {
+            return;
+        }
+
+        $journal->update([
+            'sent_at' => null,
+            'payload' => array_merge((array) $journal->payload, ['statut' => 'non_envoye', 'motif' => 'mailer_' . $mailer]),
+        ]);
     }
 
     private function markEmailFailed(AlertNotification $journal, \Throwable $e): void

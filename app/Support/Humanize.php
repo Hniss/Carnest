@@ -23,12 +23,12 @@ final class Humanize
         return intdiv($minutes, 60 * 24) . ' j';
     }
 
-    /** « d'Amina » / « de Yassine » — élision devant une voyelle ou un h muet. */
+    /** « d'Amina » / « de Yassine » / « de Hamza » — élision devant une voyelle seulement. */
     public static function de(string $name): string
     {
         $first = mb_strtolower(mb_substr(trim($name), 0, 1));
 
-        return (in_array($first, ['a', 'e', 'i', 'o', 'u', 'y', 'h', 'é', 'è', 'ê', 'à', 'â', 'î', 'ô', 'û'], true) ? "d'" : 'de ') . trim($name);
+        return (in_array($first, ['a', 'e', 'i', 'o', 'u', 'é', 'è', 'ê', 'ë', 'à', 'â', 'î', 'ï', 'ô', 'û', 'ù'], true) ? "d'" : 'de ') . trim($name);
     }
 
     public static function date(?Carbon $d): string

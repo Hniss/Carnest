@@ -274,6 +274,7 @@ backend/                         # Laravel app
   - **Écran** : `/parent/alertes` et `/parent/alertes/{id}` (lecture seule) : résumé, type, niveau, date, invitation à contacter le référent. Seulement les alertes envoyées à CE parent, consentement actif au moment de la lecture (sinon 403), `#[Locked]`, consultation auditée `parent.alert.view`. Accès par l'icône « Alertes » de la barre haute (barres de navigation inchangées) ; barre haute élargie en desktop (`lg:max-w-5xl`), « Quitter » sortait de l'écran à 1024 px.
   - **Interrupteur** : `CARENEST_PARENT_ALERTS` (`config('carenest.parent_alerts')`, vrai par défaut) ; faux = aucune notification parent, écran en 404, icône masquée.
   - **Tests** : 513 → 532 (`tests/Feature/ParentAlerts/*`).
+  - **Correctifs après audit** : le parent est prévenu APRÈS le référent et la chaîne vitale, dans un `try/catch` journalisé (une panne côté parent ne bloque plus l'école) ; e-mail d'alerte avec transport `log`/`array` tracé `statut=non_envoye`, `motif=mailer_log|mailer_array`, `sent_at` vide (tous les e-mails d'alerte) ; élève désactivé : plus de notification parent ni d'alerte visible ; `Humanize::de` n'élide plus que devant une voyelle (« de Yanis », « de Hamza »). Tests 532 → 539.
 
 ### Réserves QA ouvertes (non bloquantes)
 - Tester en prod réelle que le scheduler tourne (`php artisan schedule:work` ou cron système). **Atténué V6** : le beacon de clôture (#1) ferme désormais la session dès la fermeture/actualisation de fenêtre ; `CloseIdleSessions` n'est plus que le filet ultime.

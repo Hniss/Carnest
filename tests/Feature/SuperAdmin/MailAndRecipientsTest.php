@@ -146,6 +146,8 @@ class MailAndRecipientsTest extends TestCase
     public function test_school_recipients_receive_the_same_alert_emails_as_the_referent(): void
     {
         Mail::fake();
+        // Transport réel simulé : avec `array` / `log`, le journal dit « non envoyé » (hp-v2nf).
+        config(['mail.default' => 'smtp']);
         $this->app->instance(SmsSender::class, new RecordsSms());
         $school = School::factory()->create();
         $this->makeReferent($school, ['email' => 'ref@ecole.test']);
