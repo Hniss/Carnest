@@ -7,6 +7,12 @@ Options -Indexes
 
     RewriteEngine On
 
+    # Audit sécurité 2026-10-07 (M1, CWE-501) — l'application n'est servie que sous son propre
+    # sous-domaine : l'ancienne adresse hy-way.org/carenest/* (même origine que le WordPress)
+    # est redirigée en 301 vers carenest.hy-way.org.
+    RewriteCond %{HTTP_HOST} ^(www\.)?hy-way\.org$ [NC]
+    RewriteRule ^(.*)$ https://carenest.hy-way.org/$1 [R=301,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

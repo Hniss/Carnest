@@ -4,12 +4,10 @@ namespace App\Livewire\Admin;
 
 use App\Models\School;
 use App\Models\User;
-use App\Notifications\AccountEmailChanged;
 use App\Services\Audit;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -118,46 +116,43 @@ class Accounts extends Component
         $this->role = 'referent';
     }
 
+    /**
+     * Audit sécurité 2026-10-07 (M2, CWE-269) : l'admin d'école ne change JAMAIS l'e-mail d'un
+     * compte existant. Sinon il pourrait mettre sa propre adresse, demander « mot de passe oublié »
+     * et entrer dans le compte du référent (données nominatives, hors de son rôle limité aux
+     * agrégats). Même règle que le super-admin (05/10). Pour changer d'adresse : créer un nouveau
+     * compte, puis désactiver l'ancien.
+     */
     public function update(): void
     {
         abort_unless($this->editingId, 422);
         $u = $this->own($this->editingId);
 
+        if (Str::lower(trim($this->email)) !== Str::lower($u->email)) {
+            $this->email = $u->email;
+            $this->addError('email', 'L\'adresse d\'un compte existant ne se modifie pas : créez un nouveau compte, puis désactivez celui-ci.');
+            return;
+        }
+
         $this->validate([
             'name'  => ['required', 'string', 'max:150'],
-            'email' => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($u->id)],
             'phone' => ['nullable', 'string', 'max:30'],
             'role'  => ['required', 'in:referent,admin'],
-        ], [], ['name' => 'nom', 'email' => 'e-mail', 'phone' => 'téléphone', 'role' => 'rôle']);
+        ], [], ['name' => 'nom', 'phone' => 'téléphone', 'role' => 'rôle']);
 
         if ($this->role === 'referent' && $u->deactivated_at === null && $this->hasActiveReferent($u->id)) {
             $this->addError('role', 'Un référent actif existe déjà pour cette école.');
             return;
         }
 
-        $oldEmail = $u->email;
-        $newEmail = Str::lower(trim($this->email));
-        $emailChanged = Str::lower($oldEmail) !== $newEmail;
-
-        DB::transaction(function () use ($u, $newEmail, $emailChanged) {
+        DB::transaction(function () use ($u) {
             $u->update([
                 'name'  => trim($this->name),
-                'email' => $newEmail,
                 'phone' => $this->phone !== '' ? trim($this->phone) : null,
                 'role'  => $this->role,
             ]);
             $this->school->users()->updateExistingPivot($u->id, ['role' => $this->role === 'referent' ? 'referent' : 'director']);
-
-            // F9 (audit 2026-10-05) — nouvelle adresse non vérifiée, accès ouverts coupés.
-            if ($emailChanged) {
-                $u->forceFill(['email_verified_at' => null])->setRememberToken(Str::random(60));
-                $u->save();
-                DB::table('sessions')->where('user_id', $u->id)->delete();
-            }
         });
-        if ($emailChanged) {
-            Notification::route('mail', $oldEmail)->notify(new AccountEmailChanged($u->name));
-        }
         Audit::log('admin.account.update', $u, ['school_id' => $this->school->id]);
         $this->cancelEdit();
         $this->flash = 'Compte mis à jour.';

@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Audit sécurité 2026-10-07 (B1) — en-têtes de durcissement sur toutes les réponses.
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
         // #1 (V5) — Le beacon de clôture de session est envoyé par
         // navigator.sendBeacon() qui ne peut pas joindre d'en-tête CSRF.
         // La route reste protégée par le guard 'child' + contrôle d'appartenance.

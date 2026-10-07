@@ -20,7 +20,10 @@
             </div>
             <div>
                 <label for="a-email" class="label">E-mail</label>
-                <input id="a-email" type="email" wire:model="email" class="input">
+                <input id="a-email" type="email" wire:model="email" class="input {{ $editingId ? 'bg-stone-100 text-stone-500' : '' }}" @if ($editingId) readonly aria-describedby="a-email-help" @endif>
+                @if ($editingId)
+                    <p id="a-email-help" class="text-xs text-stone-500 mt-1">L'adresse ne se modifie pas : pour en changer, créer un nouveau compte puis désactiver celui-ci.</p>
+                @endif
                 @error('email') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
