@@ -92,10 +92,9 @@
                      x-init="start()"
                      x-on:care-breathing-start.window="$event.detail !== $el && running && stop()">
                     <div class="care-breathing-stage">
-                        <img src="{{ $avatarUrl }}" alt="Care respire avec toi" class="care-breathing-avatar select-none"
-                             :class="big ? 'is-big' : ''"
-                             :style="running ? `transition-duration: ${phase.seconds}s` : ''"
-                             height="120" draggable="false">
+                        <span class="care-breathing-bubble" data-breathing-bubble aria-hidden="true"
+                              :class="big ? 'is-big' : ''"
+                              :style="running ? `transition-duration: ${phase.seconds}s` : ''"></span>
                     </div>
                     <div class="care-breathing-text" aria-live="polite">
                         <p class="care-breathing-label" x-text="running ? phase.label : (done ? 'Terminé, tu peux recommencer quand tu veux' : 'En pause')"></p>
@@ -107,6 +106,25 @@
                 </div>
             @endif
         @endforeach
+
+        @if ($quickReplies)
+            <div class="quick-replies {{ $isTeen ? 'is-teen' : '' }} animate-fade-up" data-quick-replies role="group" aria-label="Réponses rapides">
+                @foreach ($quickReplies as $i => $reply)
+                    <button type="button"
+                            wire:click="quickReply({{ $i }})"
+                            wire:loading.attr="disabled"
+                            wire:target="quickReply"
+                            x-on:mousedown.prevent
+                            class="quick-reply quick-reply--{{ $reply['slug'] }}"
+                            {{ $isTyping ? 'disabled' : '' }}>
+                        @if ($reply['picto'])
+                            <img src="{{ $reply['picto'] }}" alt="" data-quick-reply-picto class="quick-reply-picto" width="28" height="28" draggable="false">
+                        @endif
+                        <span>{{ $reply['label'] }}</span>
+                    </button>
+                @endforeach
+            </div>
+        @endif
 
         @if ($isTyping)
             <div class="flex items-end gap-2 animate-fade-up" wire:poll.600ms="fetchReply">
@@ -214,12 +232,15 @@
             background: #fff; border: 1px solid #e7e5e4; border-radius: 1rem;
             box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
         }
-        .care-breathing-stage { flex-shrink: 0; width: 96px; height: 118px; display: flex; align-items: flex-end; justify-content: center; }
-        .care-breathing-avatar {
-            height: 96px; width: auto; transform: scale(1); transform-origin: 50% 100%;
+        .care-breathing-stage { flex-shrink: 0; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+        .care-breathing-bubble {
+            display: block; width: 96px; height: 96px; border-radius: 9999px;
+            background: radial-gradient(circle at 35% 30%, #E6F2EE 0%, #9BCBB8 45%, #2FA888 100%);
+            box-shadow: 0 6px 18px rgba(26, 127, 107, .22), inset 0 -6px 12px rgba(14, 59, 51, .12);
+            transform: scale(.55); transform-origin: 50% 50%;
             transition-property: transform; transition-timing-function: ease-in-out; transition-duration: .6s;
         }
-        .care-breathing-avatar.is-big { transform: scale(1.22); }
+        .care-breathing-bubble.is-big { transform: scale(1); }
         .care-breathing-text { min-width: 0; }
         .care-breathing-label { font-size: 1.375rem; font-weight: 700; color: #0f5f52; line-height: 1.3; }
         .care-breathing-count { margin-top: .125rem; font-size: .875rem; color: #57534e; font-variant-numeric: tabular-nums; }
@@ -228,15 +249,43 @@
             border: 1px solid #d6d3d1; background: #fff; color: #44403c; font-size: .875rem; font-weight: 600;
         }
         .care-breathing-btn:focus-visible { outline: 3px solid rgba(20, 123, 107, .35); outline-offset: 2px; }
+        .quick-replies {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem;
+            margin-left: 2.25rem;
+        }
+        .quick-replies.is-teen { margin-left: 0; }
+        .quick-replies > .quick-reply:last-child { grid-column: 1 / -1; }
+        .quick-reply {
+            display: flex; align-items: center; justify-content: center; gap: .375rem;
+            min-height: 48px; padding: .5rem .75rem; border-radius: 1rem; border: 1px solid;
+            font-size: .9375rem; font-weight: 600; line-height: 1.25; text-align: center; color: #292524;
+            transition: transform .15s ease-out, box-shadow .15s ease-out;
+        }
+        .quick-reply:hover { box-shadow: 0 4px 14px rgba(28, 25, 23, .08); }
+        .quick-reply:active { transform: scale(.97); }
+        .quick-reply:focus-visible { outline: 3px solid rgba(20, 123, 107, .35); outline-offset: 2px; }
+        .quick-reply:disabled { opacity: .55; cursor: wait; }
+        .quick-reply-picto { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+        .quick-reply--ca-va { background: #FEF6DC; border-color: #F3DFA2; }
+        .quick-reply--bof { background: #E7F1FB; border-color: #BFD8F0; }
+        .quick-reply--pas-top { background: #EFEAFB; border-color: #D3C8F1; }
+        .quick-reply--complique { background: #FCEBE3; border-color: #F1CDBB; }
+        .quick-reply--je-ne-sais-pas-trop { background: #E6F2EE; border-color: #C4E0D5; }
+        @media (min-width: 640px) {
+            .quick-replies { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+            .quick-replies > .quick-reply:last-child { grid-column: auto; }
+        }
         @media (max-width: 480px) {
             .care-breathing { margin-left: 0; gap: .75rem; padding: .875rem 1rem; }
-            .care-breathing-stage { width: 80px; height: 100px; }
-            .care-breathing-avatar { height: 80px; }
+            .care-breathing-stage { width: 80px; height: 80px; }
+            .care-breathing-bubble { width: 80px; height: 80px; }
             .care-breathing-label { font-size: 1.2rem; }
         }
         @media (prefers-reduced-motion: reduce) {
             .care-avatar-greet, .care-eyelid { animation: none !important; }
-            .care-breathing-avatar, .care-breathing-avatar.is-big { transition: none !important; transform: none !important; }
+            .quick-reply { transition: none !important; }
+            .quick-reply:active { transform: none; }
+            .care-breathing-bubble, .care-breathing-bubble.is-big { transition: none !important; transform: scale(.8) !important; }
         }
     </style>
 </div>

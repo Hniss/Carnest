@@ -42,6 +42,19 @@ class ChatInterface extends Component
         'carree' => [['label' => 'Inspire', 'seconds' => 4, 'scale' => 'in'], ['label' => 'Retiens', 'seconds' => 4, 'scale' => 'hold'], ['label' => 'Expire', 'seconds' => 4, 'scale' => 'out'], ['label' => 'Attends', 'seconds' => 4, 'scale' => 'rest']],
     ];
 
+    /**
+     * Réponses rapides sous le message d'accueil (2026-10-21, point 2). Le navigateur n'envoie
+     * que le numéro du bouton : le texte est lu ici, aucun autre texte ne passe par ce chemin.
+     * Le pictogramme de chaque bouton est lu dans public/img/care/meteo/<slug>.png s'il existe.
+     */
+    public const QUICK_REPLIES = [
+        ['slug' => 'ca-va', 'label' => 'Ça va'],
+        ['slug' => 'bof', 'label' => 'Bof'],
+        ['slug' => 'pas-top', 'label' => 'Pas top'],
+        ['slug' => 'complique', 'label' => 'Compliqué'],
+        ['slug' => 'je-ne-sais-pas-trop', 'label' => 'Je ne sais pas trop'],
+    ];
+
     /** Bornes de l'historique transmis au modèle (audit sécurité 2026-10-05, F6). */
     public const MAX_HISTORY_MESSAGES = 60;
     public const MAX_MESSAGE_CHARS = 2000;
@@ -243,6 +256,43 @@ class ChatInterface extends Component
 
         $text = mb_substr(trim($this->input), 0, self::MAX_MESSAGE_CHARS);
         $this->input = '';
+        $this->submitChildText($text);
+    }
+
+    /**
+     * Réponse rapide : seul un numéro de la liste serveur est accepté (422 sinon). Le texte du
+     * bouton suit ensuite exactement le chemin d'un message écrit. Le texte éventuellement
+     * commencé dans la case d'écriture est laissé en place.
+     */
+    public function quickReply($index): void
+    {
+        $this->refuseForeignSession('quickReply');
+
+        abort_unless(is_int($index) && isset(self::QUICK_REPLIES[$index]), 422);
+
+        if ($this->isTyping || $this->sessionClosed || ! $this->quickRepliesAvailable()) return;
+
+        $this->submitChildText(self::QUICK_REPLIES[$index]['label']);
+    }
+
+    /** Les réponses rapides ne sont proposées que tant que l'enfant n'a rien envoyé dans la session. */
+    private function quickRepliesAvailable(): bool
+    {
+        return ! $this->sessionClosed && ! collect($this->messages)->contains('role', 'user');
+    }
+
+    /** Boutons à afficher, avec le pictogramme seulement quand son fichier existe. */
+    private function quickReplyButtons(): array
+    {
+        return array_map(function (array $reply) {
+            $path = "img/care/meteo/{$reply['slug']}.png";
+
+            return $reply + ['picto' => is_file(public_path($path)) ? asset($path) : null];
+        }, self::QUICK_REPLIES);
+    }
+
+    private function submitChildText(string $text): void
+    {
         $this->messages[] = ['role' => 'user', 'content' => $text];
 
         // D10 (v3) — 20 messages / minute / enfant. Au-delà : réponse douce
@@ -846,6 +896,8 @@ class ChatInterface extends Component
 
     public function render()
     {
-        return view('livewire.child.chat-interface');
+        return view('livewire.child.chat-interface', [
+            'quickReplies' => $this->quickRepliesAvailable() ? $this->quickReplyButtons() : [],
+        ]);
     }
 }

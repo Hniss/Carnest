@@ -74,6 +74,34 @@ class CareAvatarMotionTest extends TestCase
             ->assertSee('data-breathing-phases="[{&quot;label&quot;:&quot;Inspire&quot;,&quot;seconds&quot;:4,&quot;scale&quot;:&quot;in&quot;},{&quot;label&quot;:&quot;Retiens&quot;,&quot;seconds&quot;:7,&quot;scale&quot;:&quot;hold&quot;},{&quot;label&quot;:&quot;Expire&quot;,&quot;seconds&quot;:8,&quot;scale&quot;:&quot;out&quot;}]"', false);
     }
 
+    public function test_a_bubble_replaces_care_in_the_breathing_card(): void
+    {
+        $this->loginChild();
+        $this->aiReplies(['message' => 'On fait la respiration carrée ?', 'zone' => 'yellow', 'exercise' => 'carree']);
+
+        $html = Livewire::test(ChatInterface::class)->set('input', 'contrôle demain')->call('sendMessage')->call('fetchReply')->html();
+
+        $card = substr($html, strpos($html, 'data-breathing="carree"'));
+        $card = substr($card, 0, strpos($card, 'care-breathing-text'));
+        $this->assertStringContainsString('data-breathing-bubble', $card);
+        $this->assertStringContainsString('aria-hidden="true"', $card);
+        $this->assertStringNotContainsString('care-avatar.png', $card);
+        $this->assertStringContainsString('aria-live="polite"', $html);
+    }
+
+    public function test_bubble_stays_still_with_reduced_motion_and_fits_each_format(): void
+    {
+        $this->loginChild();
+        $this->aiReplies(['message' => 'On essaie la respiration 4-7-8 ensemble ?', 'zone' => 'yellow', 'exercise' => '478']);
+
+        $html = Livewire::test(ChatInterface::class)->set('input', 'stress')->call('sendMessage')->call('fetchReply')->html();
+
+        $reduced = substr($html, strpos($html, '@media (prefers-reduced-motion: reduce)'));
+        $this->assertMatchesRegularExpression('/\.care-breathing-bubble[^{]*\{[^}]*transition:\s*none/', $reduced);
+        $this->assertMatchesRegularExpression('/\.care-breathing-bubble\s*\{[^}]*width:\s*96px/', $html);
+        $this->assertMatchesRegularExpression('/@media \(max-width: 480px\)\s*\{[^@]*\.care-breathing-bubble\s*\{[^}]*width:\s*80px/', $html);
+    }
+
     public function test_square_breathing_follows_4_4_4_4(): void
     {
         $this->loginChild();
