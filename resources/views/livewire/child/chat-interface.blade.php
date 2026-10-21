@@ -59,7 +59,7 @@
                 </div>
                 @if ($msg['role'] === 'user')
                     <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-900 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                        {{ strtoupper(substr(auth('child')->user()->name, 0, 1)) }}
+                        {{ mb_strtoupper(mb_substr(auth('child')->user()->name, 0, 1)) }}
                     </div>
                 @endif
             </div>
