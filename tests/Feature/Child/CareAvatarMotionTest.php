@@ -48,8 +48,8 @@ class CareAvatarMotionTest extends TestCase
         Livewire::test(ChatInterface::class)
             ->assertSee('data-care-avatar="header"', false)
             ->assertSee('care-avatar-greet', false)
-            ->assertSee('care-eyelid', false)
-            ->assertSee('care-avatar.png');
+            ->assertSee('data-care-blink', false)
+            ->assertSee('care-peluche-base.webp');
     }
 
     public function test_motion_respects_reduced_motion_preference(): void
@@ -85,7 +85,7 @@ class CareAvatarMotionTest extends TestCase
         $card = substr($card, 0, strpos($card, 'care-breathing-text'));
         $this->assertStringContainsString('data-breathing-bubble', $card);
         $this->assertStringContainsString('aria-hidden="true"', $card);
-        $this->assertStringNotContainsString('care-avatar.png', $card);
+        $this->assertStringNotContainsString('care-peluche', $card);
         $this->assertStringContainsString('aria-live="polite"', $html);
     }
 

@@ -46,14 +46,19 @@ class ChatInterface extends Component
      * Réponses rapides sous le message d'accueil (2026-10-21, point 2). Le navigateur n'envoie
      * que le numéro du bouton : le texte est lu ici, aucun autre texte ne passe par ce chemin.
      * Le pictogramme de chaque bouton est lu dans public/img/care/meteo/<slug>.png s'il existe.
+     * « mood » : expression que prend Care du bloc d'accueil quand l'enfant touche ce bouton
+     * (point 1, correspondance validée par Hamza) — gérée dans le navigateur seulement.
      */
     public const QUICK_REPLIES = [
-        ['slug' => 'ca-va', 'label' => 'Ça va'],
-        ['slug' => 'bof', 'label' => 'Bof'],
-        ['slug' => 'pas-top', 'label' => 'Pas top'],
-        ['slug' => 'complique', 'label' => 'Compliqué'],
-        ['slug' => 'je-ne-sais-pas-trop', 'label' => 'Je ne sais pas trop'],
+        ['slug' => 'ca-va', 'label' => 'Ça va', 'mood' => 'heureuse'],
+        ['slug' => 'bof', 'label' => 'Bof', 'mood' => 'attentive'],
+        ['slug' => 'pas-top', 'label' => 'Pas top', 'mood' => 'encourageante'],
+        ['slug' => 'complique', 'label' => 'Compliqué', 'mood' => 'calme'],
+        ['slug' => 'je-ne-sais-pas-trop', 'label' => 'Je ne sais pas trop', 'mood' => 'attentive'],
     ];
+
+    /** Expressions de Care au style peluche (point 1) : aucune n'est triste ni inquiète. */
+    public const CARE_EXPRESSIONS = ['base', 'heureuse', 'calme', 'attentive', 'encourageante'];
 
     /** Bornes de l'historique transmis au modèle (audit sécurité 2026-10-05, F6). */
     public const MAX_HISTORY_MESSAGES = 60;

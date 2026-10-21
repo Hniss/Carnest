@@ -3,7 +3,10 @@
     // pour 5-7 et 8-11 uniquement (discret pour 12-18).
     $ageGroup = auth('child')->user()->age_group;
     $isTeen = $ageGroup === '12-18';
-    $avatarUrl = asset('img/care/care-avatar.png');
+    $peluche = fn (string $name) => asset("img/care/care-peluche-{$name}.webp");
+    $faceUrl = asset('img/care/care-peluche-visage.webp');
+    $headerHeight = $isTeen ? 40 : 64;
+    $headerWidth = $isTeen ? 36 : 58;
 @endphp
 <div class="flex flex-col min-h-screen bg-gradient-to-b from-brand-50/40 via-stone-50 to-stone-50">
 
@@ -15,16 +18,19 @@
         </a>
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
             <span class="care-avatar care-avatar-greet shrink-0" wire:ignore
-                  style="height: {{ $isTeen ? 40 : 64 }}px; width: {{ $isTeen ? 33 : 52 }}px;">
-                <img src="{{ $avatarUrl }}"
-                     alt="Care"
-                     data-care-avatar="header"
-                     class="select-none"
-                     style="height: {{ $isTeen ? 40 : 64 }}px; width: auto; object-fit: contain;"
-                     height="{{ $isTeen ? 40 : 64 }}"
-                     draggable="false">
-                <span class="care-eyelid care-eyelid-left" aria-hidden="true"></span>
-                <span class="care-eyelid care-eyelid-right" aria-hidden="true"></span>
+                  style="height: {{ $headerHeight }}px; width: {{ $headerWidth }}px;">
+                <span class="care-avatar-body" data-care-header>
+                    <img src="{{ $peluche('base') }}"
+                         alt="Care"
+                         data-care-avatar="header"
+                         class="select-none"
+                         style="height: {{ $headerHeight }}px; width: {{ $headerWidth }}px; object-fit: contain;"
+                         width="{{ $headerWidth }}" height="{{ $headerHeight }}"
+                         draggable="false">
+                    <img src="{{ $peluche('yeux-fermes') }}" alt="" aria-hidden="true"
+                         data-care-blink class="care-blink select-none"
+                         width="{{ $headerWidth }}" height="{{ $headerHeight }}" draggable="false">
+                </span>
             </span>
             <span class="text-sm text-stone-500 hidden sm:inline">
                 Bonjour, <span class="text-stone-900 font-medium">{{ auth('child')->user()->name }}</span>
@@ -41,15 +47,31 @@
 
     {{-- Messages --}}
     <div id="messages" class="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full pb-40 space-y-4">
+        <div class="care-welcome {{ $isTeen ? 'is-teen' : '' }}" data-care-welcome wire:ignore
+             x-data="{ mood: 'base', moods: @js(\App\Livewire\Child\ChatInterface::CARE_EXPRESSIONS) }"
+             x-on:care-mood.window="mood = moods.includes($event.detail) ? $event.detail : 'base'">
+            <div class="care-welcome-figure" data-mood="base" x-bind:data-mood="mood">
+                @foreach (\App\Livewire\Child\ChatInterface::CARE_EXPRESSIONS as $expression)
+                    <img src="{{ $peluche($expression) }}"
+                         alt="{{ $expression === 'base' ? 'Care' : '' }}"
+                         @if ($expression !== 'base') aria-hidden="true" @endif
+                         data-care-expression="{{ $expression }}"
+                         class="select-none" width="108" height="120" draggable="false">
+                @endforeach
+            </div>
+        </div>
+
         @foreach ($messages as $msg)
-            <div class="flex {{ $msg['role'] === 'user' ? 'flex-row-reverse' : '' }} items-end gap-2 animate-fade-up">
+            <div wire:key="msg-{{ $loop->index }}"
+                 class="flex {{ $msg['role'] === 'user' ? 'flex-row-reverse' : '' }} items-end gap-2 animate-fade-up"
+                 @if ($msg['role'] === 'assistant') data-care-reply @endif>
                 @if ($msg['role'] === 'assistant' && ! $isTeen)
-                    <img src="{{ $avatarUrl }}"
+                    <img src="{{ $faceUrl }}"
                          alt="Care"
                          data-care-avatar="bubble"
                          class="flex-shrink-0 select-none"
-                         style="height: 28px; width: auto; object-fit: contain;"
-                         height="28" draggable="false">
+                         style="height: 28px; width: 28px; object-fit: contain;"
+                         width="28" height="28" draggable="false">
                 @endif
                 <div class="max-w-xs md:max-w-md px-4 py-3 text-[15px] leading-relaxed
                     {{ $msg['role'] === 'user'
@@ -115,10 +137,12 @@
                             wire:loading.attr="disabled"
                             wire:target="quickReply"
                             x-on:mousedown.prevent
+                            x-on:click="$dispatch('care-mood', $el.dataset.careMood)"
                             class="quick-reply quick-reply--{{ $reply['slug'] }}"
+                            data-care-mood="{{ $reply['mood'] }}"
                             {{ $isTyping ? 'disabled' : '' }}>
                         @if ($reply['picto'])
-                            <img src="{{ $reply['picto'] }}" alt="" data-quick-reply-picto class="quick-reply-picto" width="28" height="28" draggable="false">
+                            <img src="{{ $reply['picto'] }}" alt="" data-quick-reply-picto class="quick-reply-picto" width="48" height="48" draggable="false">
                         @endif
                         <span>{{ $reply['label'] }}</span>
                     </button>
@@ -129,12 +153,12 @@
         @if ($isTyping)
             <div class="flex items-end gap-2 animate-fade-up" wire:poll.600ms="fetchReply">
                 @if (! $isTeen)
-                    <img src="{{ $avatarUrl }}"
+                    <img src="{{ $faceUrl }}"
                          alt="Care"
                          data-care-avatar="bubble"
                          class="flex-shrink-0 select-none"
-                         style="height: 28px; width: auto; object-fit: contain;"
-                         height="28" draggable="false">
+                         style="height: 28px; width: 28px; object-fit: contain;"
+                         width="28" height="28" draggable="false">
                 @endif
                 <div class="bg-white border border-stone-100 px-4 py-3 rounded-2xl rounded-bl-md shadow-card">
                     <div class="flex gap-1.5">
@@ -214,18 +238,34 @@
             75%  { transform: translateY(0) rotate(4deg); }
             100% { transform: translateY(0) rotate(0); }
         }
-        .care-eyelid {
-            position: absolute; width: 19.5%; height: 17%; top: 47.4%;
-            background: #147b6b; border-radius: 50%; box-shadow: inset 0 -2px 0 rgba(5, 47, 42, .55);
-            transform: scaleY(0); transform-origin: 50% 0;
+        .care-avatar-body { position: relative; display: block; transform-origin: 50% 100%; }
+        .care-blink {
+            position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+            opacity: 0; pointer-events: none;
             animation: care-blink 5.2s ease-in-out 2.2s infinite;
         }
-        .care-eyelid-left  { left: 21.8%; }
-        .care-eyelid-right { left: 54.1%; }
         @keyframes care-blink {
-            0%, 93%, 100% { transform: scaleY(0); }
-            95.5%, 96.5%  { transform: scaleY(1); }
+            0%, 93%, 100% { opacity: 0; }
+            95%, 97%      { opacity: 1; }
         }
+        .care-bounce { animation: care-bounce .4s ease-out 1; transform-origin: 50% 100%; }
+        @keyframes care-bounce {
+            0%, 100% { transform: translateY(0); }
+            40%      { transform: translateY(-18%); }
+        }
+        .care-welcome { margin-left: 2.25rem; }
+        .care-welcome.is-teen { margin-left: 0; }
+        .care-welcome-figure { position: relative; height: 96px; width: 87px; }
+        .care-welcome-figure img {
+            position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+            opacity: 0; transition: opacity .3s ease-out;
+        }
+        .care-welcome-figure[data-mood="base"] [data-care-expression="base"],
+        .care-welcome-figure[data-mood="heureuse"] [data-care-expression="heureuse"],
+        .care-welcome-figure[data-mood="calme"] [data-care-expression="calme"],
+        .care-welcome-figure[data-mood="attentive"] [data-care-expression="attentive"],
+        .care-welcome-figure[data-mood="encourageante"] [data-care-expression="encourageante"] { opacity: 1; }
+        .care-welcome.is-teen .care-welcome-figure { height: 64px !important; width: 58px !important; }
         .care-breathing {
             display: flex; align-items: center; gap: 1rem;
             margin-left: 2.25rem; max-width: 26rem; padding: 1rem 1.25rem;
@@ -265,15 +305,17 @@
         .quick-reply:active { transform: scale(.97); }
         .quick-reply:focus-visible { outline: 3px solid rgba(20, 123, 107, .35); outline-offset: 2px; }
         .quick-reply:disabled { opacity: .55; cursor: wait; }
-        .quick-reply-picto { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+        .quick-reply-picto { width: 48px; height: 48px; object-fit: contain; flex-shrink: 0; }
         .quick-reply--ca-va { background: #FEF6DC; border-color: #F3DFA2; }
         .quick-reply--bof { background: #E7F1FB; border-color: #BFD8F0; }
         .quick-reply--pas-top { background: #EFEAFB; border-color: #D3C8F1; }
         .quick-reply--complique { background: #FCEBE3; border-color: #F1CDBB; }
         .quick-reply--je-ne-sais-pas-trop { background: #E6F2EE; border-color: #C4E0D5; }
         @media (min-width: 640px) {
+            .care-welcome-figure { height: 120px; width: 108px; }
             .quick-replies { grid-template-columns: repeat(5, minmax(0, 1fr)); }
             .quick-replies > .quick-reply:last-child { grid-column: auto; }
+            .quick-reply { flex-direction: column; gap: .25rem; padding: .625rem .5rem; }
         }
         @media (max-width: 480px) {
             .care-breathing { margin-left: 0; gap: .75rem; padding: .875rem 1rem; }
@@ -282,7 +324,8 @@
             .care-breathing-label { font-size: 1.2rem; }
         }
         @media (prefers-reduced-motion: reduce) {
-            .care-avatar-greet, .care-eyelid { animation: none !important; }
+            .care-avatar-greet, .care-blink, .care-bounce { animation: none !important; }
+            .care-welcome-figure img { transition: none !important; }
             .quick-reply { transition: none !important; }
             .quick-reply:active { transform: none; }
             .care-breathing-bubble, .care-breathing-bubble.is-big { transition: none !important; transform: scale(.8) !important; }
@@ -305,6 +348,10 @@
     - #1 (V5) — fermeture ou actualisation de la fenêtre sans « J'ai fini ma session » :
       la session est clôturée par navigator.sendBeacon (POST /chat/close, contrôle
       d'appartenance côté serveur), une seule fois.
+    - Point 1 (2026-10-21) — à chaque nouvelle réponse de Care (nombre de [data-care-reply] qui
+      augmente) : Care du bloc d'accueil revient à son expression de base, puis un seul rebond
+      sur la vignette de la réponse (sur Care de l'en-tête chez les 12-18). Aucun rebond si
+      « réduire les animations ». L'expression ne dépend que du bouton touché, jamais de la zone.
 --}}
 @script
 <script>
@@ -316,8 +363,26 @@
         page.scrollTop = page.scrollHeight;
     });
 
+    const careReplies = () => messagesEl ? messagesEl.querySelectorAll('[data-care-reply]') : [];
+    let repliesSeen = careReplies().length;
+    const onCareReply = () => {
+        const rows = careReplies();
+        const arrived = rows.length > repliesSeen;
+        repliesSeen = rows.length;
+        if (!arrived) return;
+        window.dispatchEvent(new CustomEvent('care-mood', { detail: 'base' }));
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const target = rows[rows.length - 1].querySelector('[data-care-avatar="bubble"]') || document.querySelector('[data-care-header]');
+        if (!target) return;
+        target.classList.remove('care-bounce');
+        void target.offsetWidth;
+        target.classList.add('care-bounce');
+        target.addEventListener('animationend', () => target.classList.remove('care-bounce'), { once: true });
+    };
+
     if (messagesEl) {
         new MutationObserver((mutations) => {
+            onCareReply();
             if (mutations.some((m) => !(m.target.closest && m.target.closest('[data-breathing]')))) scrollDown();
         }).observe(messagesEl, { childList: true, subtree: true });
         window.addEventListener('load', scrollDown);

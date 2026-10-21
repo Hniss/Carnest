@@ -193,38 +193,17 @@ class QuickRepliesTest extends TestCase
         $this->assertSame('v3.4', GeminiService::PROMPT_VERSION);
     }
 
-    public function test_no_picto_image_is_rendered_while_the_file_is_absent(): void
+    public function test_each_button_shows_its_picto_next_to_its_label(): void
     {
         $this->loginChild();
+        $html = Livewire::test(ChatInterface::class)->html();
+
         foreach (ChatInterface::QUICK_REPLIES as $reply) {
-            $this->assertFileDoesNotExist(public_path("img/care/meteo/{$reply['slug']}.png"));
-        }
-
-        Livewire::test(ChatInterface::class)
-            ->assertSee('data-quick-replies', false)
-            ->assertDontSee('data-quick-reply-picto', false)
-            ->assertDontSee('img/care/meteo/', false);
-    }
-
-    public function test_picto_is_rendered_once_its_file_exists(): void
-    {
-        $this->loginChild();
-        $dir = public_path('img/care/meteo');
-        $createdDir = ! File::isDirectory($dir);
-        $file = $dir . '/bof.png';
-        File::ensureDirectoryExists($dir);
-        File::put($file, 'png');
-
-        try {
-            Livewire::test(ChatInterface::class)
-                ->assertSee('data-quick-reply-picto', false)
-                ->assertSee('img/care/meteo/bof.png', false)
-                ->assertDontSee('img/care/meteo/ca-va.png', false);
-        } finally {
-            File::delete($file);
-            if ($createdDir) {
-                File::deleteDirectory($dir);
-            }
+            $this->assertFileExists(public_path("img/care/meteo/{$reply['slug']}.png"));
+            $this->assertMatchesRegularExpression(
+                '/quick-reply--' . preg_quote($reply['slug'], '/') . '".*?img\/care\/meteo\/' . preg_quote($reply['slug'], '/') . '\.png.*?<span>' . preg_quote(e($reply['label']), '/') . '<\/span>/s',
+                $html
+            );
         }
     }
 }

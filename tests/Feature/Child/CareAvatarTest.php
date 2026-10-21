@@ -33,7 +33,7 @@ class CareAvatarTest extends TestCase
         $this->loginChild(9);
 
         Livewire::test(ChatInterface::class)
-            ->assertSee('img/care/care-avatar.png')
+            ->assertSee('img/care/care-peluche-base.webp')
             ->assertSee('alt="Care"', false)
             ->assertSee('data-care-avatar="header"', false)
             ->assertSee('data-care-avatar="bubble"', false);
