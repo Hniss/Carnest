@@ -96,6 +96,44 @@ class QuickRepliesTest extends TestCase
         $this->assertSame("D'accord, je t'écoute.", $c->get('messages')[2]['content']);
     }
 
+    /**
+     * Correctif 2026-10-22 (hp-raoe) : « Compliqué » seul faisait répondre Care par une phrase
+     * bancale (« tu te sentes un peu compliqué »). Le bouton garde son libellé mais envoie
+     * « C'est compliqué » ; les 4 autres boutons envoient exactement leur libellé.
+     */
+    public function test_each_button_sends_its_expected_text(): void
+    {
+        $expected = ['Ça va', 'Bof', 'Pas top', "C'est compliqué", 'Je ne sais pas trop'];
+
+        foreach ($expected as $index => $text) {
+            $this->loginChild();
+            $sent = null;
+            $this->aiReply(function (array $messages) use (&$sent) {
+                $sent = $messages;
+            });
+
+            $c = Livewire::test(ChatInterface::class)->call('quickReply', $index);
+            $messages = $c->get('messages');
+            $this->assertSame(['role' => 'user', 'content' => $text], end($messages), "bouton {$index}");
+
+            $c->call('fetchReply');
+            $this->assertSame([['role' => 'user', 'content' => $text]], $sent, "bouton {$index}");
+        }
+    }
+
+    public function test_complique_button_keeps_its_label_and_mood(): void
+    {
+        $this->assertSame(
+            ['slug' => 'complique', 'label' => 'Compliqué', 'mood' => 'calme'],
+            array_intersect_key(ChatInterface::QUICK_REPLIES[3], array_flip(['slug', 'label', 'mood']))
+        );
+        $this->loginChild();
+
+        Livewire::test(ChatInterface::class)
+            ->assertSeeHtml('<span>Compliqué</span>')
+            ->assertDontSee("C'est compliqué");
+    }
+
     public function test_unknown_index_is_rejected_and_nothing_is_sent(): void
     {
         $child = $this->loginChild();
@@ -184,6 +222,7 @@ class QuickRepliesTest extends TestCase
         $session = ChatSession::firstOrFail();
         foreach ($session->getAttributes() + ['ai_summary' => $session->ai_summary, 'care_memory' => $session->care_memory] as $value) {
             $this->assertStringNotContainsString('Compliqué', (string) $value);
+            $this->assertStringNotContainsString('compliqué', (string) $value);
         }
         $this->assertSame(0, DB::table('alerts')->count());
     }

@@ -48,12 +48,14 @@ class ChatInterface extends Component
      * Le pictogramme de chaque bouton est lu dans public/img/care/meteo/<slug>.png s'il existe.
      * « mood » : expression que prend Care du bloc d'accueil quand l'enfant touche ce bouton
      * (point 1, correspondance validée par Hamza) — gérée dans le navigateur seulement.
+     * « message » (facultatif) : texte envoyé à la place du libellé quand le libellé seul ne fait
+     * pas une phrase correcte (2026-10-22 : « Compliqué » envoie « C'est compliqué »).
      */
     public const QUICK_REPLIES = [
         ['slug' => 'ca-va', 'label' => 'Ça va', 'mood' => 'heureuse'],
         ['slug' => 'bof', 'label' => 'Bof', 'mood' => 'attentive'],
         ['slug' => 'pas-top', 'label' => 'Pas top', 'mood' => 'encourageante'],
-        ['slug' => 'complique', 'label' => 'Compliqué', 'mood' => 'calme'],
+        ['slug' => 'complique', 'label' => 'Compliqué', 'message' => "C'est compliqué", 'mood' => 'calme'],
         ['slug' => 'je-ne-sais-pas-trop', 'label' => 'Je ne sais pas trop', 'mood' => 'attentive'],
     ];
 
@@ -277,7 +279,8 @@ class ChatInterface extends Component
 
         if ($this->isTyping || $this->sessionClosed || ! $this->quickRepliesAvailable()) return;
 
-        $this->submitChildText(self::QUICK_REPLIES[$index]['label']);
+        $reply = self::QUICK_REPLIES[$index];
+        $this->submitChildText($reply['message'] ?? $reply['label']);
     }
 
     /** Les réponses rapides ne sont proposées que tant que l'enfant n'a rien envoyé dans la session. */
