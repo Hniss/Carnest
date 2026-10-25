@@ -107,6 +107,11 @@ Route::middleware('auth:child')->group(function () {
     Route::post('/chat/close', SessionCloseController::class)->name('child.chat.close');
 });
 
+// E-002 — réception des rapports de violation CSP (navigateur → journal hors racine web).
+Route::post('/csp-report', \App\Http\Controllers\CspReportController::class)
+    ->middleware('throttle:60,1')
+    ->name('csp.report');
+
 Route::view('profile', 'profile')
     ->middleware(['auth'])
     ->name('profile');

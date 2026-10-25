@@ -20,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // E-001 (2026-10-24) — chaque instantané Livewire est lié à sa session et au temps.
+        // Enregistré ici (register) : le registre des hooks Livewire démarre avant le boot de l'app.
+        \Livewire\ComponentHookRegistry::register(\App\Livewire\Hooks\SnapshotSessionBinding::class);
+
         $this->registerAdjudicator();
 
         $this->app->singleton(AIService::class, function () {

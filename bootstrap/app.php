@@ -14,12 +14,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Audit sécurité 2026-10-07 (B1) — en-têtes de durcissement sur toutes les réponses.
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        // E-002 (2026-10-24) — politique de sécurité du contenu avec nonce par requête.
+        $middleware->append(\App\Http\Middleware\ContentSecurityPolicy::class);
 
         // #1 (V5) — Le beacon de clôture de session est envoyé par
         // navigator.sendBeacon() qui ne peut pas joindre d'en-tête CSRF.
         // La route reste protégée par le guard 'child' + contrôle d'appartenance.
         $middleware->validateCsrfTokens(except: [
             'chat/close',
+            // E-002 — les rapports de violation CSP sont envoyés par le navigateur lui-même, sans jeton.
+            'csp-report',
         ]);
 
         // Audit sécurité 2026-10-05 (F4) — un compte désactivé est déconnecté à la requête suivante.
@@ -49,5 +53,9 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // E-001 — un instantané Livewire refusé (autre session, expiré) répond 419 en JSON :
+        // le navigateur affiche le message en français et recharge, jamais de page d'erreur.
+        $exceptions->render(fn (\App\Exceptions\SnapshotRejectedException $e) => response()->json(
+            ['message' => $e->getMessage(), 'reason' => $e->reason], 419
+        ));
     })->create();

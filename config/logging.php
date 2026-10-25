@@ -58,6 +58,14 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // E-002 — rapports de violation CSP, hors racine web, jamais mêlés au journal applicatif.
+        'csp' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/csp-violations.log'),
+            'level' => 'info',
+            'replace_placeholders' => true,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),

@@ -10,4 +10,12 @@ return [
      */
     'parent_alerts' => (bool) env('CARENEST_PARENT_ALERTS', true),
 
+    /*
+     * E-002 (test d'intrusion du 2026-10-22) : mode de la politique de sécurité du contenu.
+     * « report-only » observe et journalise (storage/logs/csp-violations.log), « enforce »
+     * bloque, « off » n'envoie rien. Bascule en « enforce » une fois le parcours de toutes les
+     * pages fait sans violation.
+     */
+    'csp_mode' => env('CSP_MODE', 'report-only'),
+
 ];
