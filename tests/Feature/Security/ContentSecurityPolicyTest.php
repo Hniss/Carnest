@@ -94,7 +94,7 @@ class ContentSecurityPolicyTest extends TestCase
     {
         $path = storage_path('logs/csp-violations-test.log');
         File::delete($path);
-        config(['logging.channels.csp.path' => $path]);
+        config(['logging.channels.csp.path' => $path, 'logging.channels.csp.driver' => 'single']);
 
         $this->postJson('/csp-report', ['csp-report' => [
             'document-uri' => 'https://carenest.hy-way.org/login',
@@ -115,7 +115,7 @@ class ContentSecurityPolicyTest extends TestCase
     {
         $path = storage_path('logs/csp-violations-test.log');
         File::delete($path);
-        config(['logging.channels.csp.path' => $path]);
+        config(['logging.channels.csp.path' => $path, 'logging.channels.csp.driver' => 'single']);
 
         $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'application/csp-report'],
             json_encode(['csp-report' => ['violated-directive' => 'font-src', 'blocked-uri' => 'https://evil.example']]))
@@ -129,5 +129,70 @@ class ContentSecurityPolicyTest extends TestCase
     {
         $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'text/plain'], 'pas du json')->assertNoContent();
         $this->call('POST', '/csp-report', [], [], [], ['CONTENT_TYPE' => 'application/json'], str_repeat('x', 20000))->assertNoContent();
+    }
+
+    public function test_logged_urls_keep_the_path_only_without_query_string_and_are_truncated(): void
+    {
+        $path = storage_path('logs/csp-violations-test.log');
+        File::delete($path);
+        config(['logging.channels.csp.path' => $path, 'logging.channels.csp.driver' => 'single']);
+
+        $this->postJson('/csp-report', ['csp-report' => [
+            'document-uri' => 'https://carenest.hy-way.org/reset-password/JETONSECRET123?email=parent%40exemple.ma',
+            'violated-directive' => 'script-src',
+            'blocked-uri' => 'https://evil.example/x.js?token=ABCDEF#frag',
+            'source-file' => 'https://carenest.hy-way.org/'.str_repeat('a', 400).'?q=1',
+        ]])->assertNoContent();
+
+        $log = file_get_contents($path);
+        $this->assertStringNotContainsString('JETONSECRET123', $log);
+        $this->assertStringNotContainsString('parent', $log);
+        $this->assertStringNotContainsString('ABCDEF', $log);
+        $this->assertStringNotContainsString('?', explode('Violation CSP', $log)[1]);
+        $this->assertStringContainsString('/reset-password/{jeton}', $log);
+        $this->assertStringContainsString('https://evil.example/x.js', $log);
+        $this->assertStringNotContainsString(str_repeat('a', 200), $log);
+        File::delete($path);
+    }
+
+    public function test_numeric_identifiers_in_the_path_are_masked(): void
+    {
+        $path = storage_path('logs/csp-violations-test.log');
+        File::delete($path);
+        config(['logging.channels.csp.path' => $path, 'logging.channels.csp.driver' => 'single']);
+
+        $this->postJson('/csp-report', ['csp-report' => [
+            'document-uri' => 'https://carenest.hy-way.org/dashboard-referent/eleves/4217',
+            'violated-directive' => 'img-src', 'blocked-uri' => 'data',
+        ]])->assertNoContent();
+
+        $log = file_get_contents($path);
+        $this->assertStringContainsString('/dashboard-referent/eleves/{id}', $log);
+        $this->assertStringNotContainsString('4217', $log);
+        File::delete($path);
+    }
+
+    public function test_csp_log_channel_rotates_daily_with_short_retention(): void
+    {
+        $this->assertSame('daily', config('logging.channels.csp.driver'));
+        $this->assertLessThanOrEqual(14, config('logging.channels.csp.days'));
+        $this->assertGreaterThan(0, config('logging.channels.csp.days'));
+    }
+
+    public function test_a_global_ceiling_stops_logging_beyond_the_limit_whatever_the_ip(): void
+    {
+        $path = storage_path('logs/csp-violations-test.log');
+        File::delete($path);
+        config(['logging.channels.csp.path' => $path, 'logging.channels.csp.driver' => 'single']);
+        $max = \App\Http\Controllers\CspReportController::GLOBAL_PER_MINUTE;
+
+        for ($i = 0; $i < $max + 5; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '10.0.'.intdiv($i, 250).'.'.($i % 250)])
+                ->postJson('/csp-report', ['csp-report' => ['violated-directive' => 'img-src', 'blocked-uri' => 'data']])
+                ->assertNoContent();
+        }
+
+        $this->assertSame($max, substr_count(file_get_contents($path), 'Violation CSP'));
+        File::delete($path);
     }
 }

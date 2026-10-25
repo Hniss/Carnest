@@ -184,6 +184,7 @@
                 <form x-on:submit.prevent="$wire.sendMessage()" class="flex-1 flex gap-2 items-center">
                     <input wire:model="input" type="text"
                            data-chat-input
+                           data-draft-key="{{ substr(hash_hmac('sha256', 'brouillon|'.auth('child')->id(), config('app.key')), 0, 16) }}"
                            placeholder="Écris ce que tu ressens…"
                            class="flex-1 px-4 py-2.5 bg-transparent border-0 focus:ring-0 focus:outline-none text-[15px] placeholder:text-stone-400">
                     <button type="submit"

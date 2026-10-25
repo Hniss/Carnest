@@ -60,8 +60,9 @@ return [
 
         // E-002 — rapports de violation CSP, hors racine web, jamais mêlés au journal applicatif.
         'csp' => [
-            'driver' => 'single',
+            'driver' => 'daily',
             'path' => storage_path('logs/csp-violations.log'),
+            'days' => 14,
             'level' => 'info',
             'replace_placeholders' => true,
         ],

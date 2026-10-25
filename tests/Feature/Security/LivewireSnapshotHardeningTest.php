@@ -63,6 +63,15 @@ class LivewireSnapshotHardeningTest extends TestCase
         $this->assertEqualsWithDelta(time(), $memo['iat'], 5);
     }
 
+    public function test_fingerprint_uses_a_domain_separation_prefix(): void
+    {
+        $memo = $this->bell()->snapshot['memo'];
+        $key = app('encrypter')->getKey();
+
+        $this->assertSame(hash_hmac('sha256', 'livewire-sid|'.session()->getId(), $key), $memo['sid']);
+        $this->assertNotSame(hash_hmac('sha256', session()->getId(), $key), $memo['sid']);
+    }
+
     public function test_normal_subsequent_request_from_the_same_session_is_accepted(): void
     {
         $this->bell()->call('markAllRead')->assertOk();

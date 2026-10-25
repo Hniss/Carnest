@@ -26,7 +26,9 @@ class SnapshotSessionBinding extends ComponentHook
 
     public static function fingerprint(): string
     {
-        return hash_hmac('sha256', session()->getId(), app('encrypter')->getKey());
+        // Préfixe de séparation de domaine : cette HMAC ne peut être confondue avec aucune autre
+        // HMAC calculée avec APP_KEY (dont la somme de contrôle Livewire).
+        return hash_hmac('sha256', 'livewire-sid|'.session()->getId(), app('encrypter')->getKey());
     }
 
     public static function maxAgeSeconds(): int
